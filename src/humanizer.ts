@@ -229,9 +229,17 @@ export function installHumanizer(pi: ExtensionAPI): void {
   });
 
   pi.registerCommand("ru-clean", {
-    description: "Отредактировать последнее содержательное assistant-сообщение через Humanizer",
+    description: "Отредактировать последнее сообщение или явно названную цель через Humanizer",
     handler: async (args, ctx) => {
-      if (args.trim()) { if (ctx.hasUI) ctx.ui.notify("Для явного текста, файла или фрагмента используйте /skill:humanizer-ru.", "warning"); return; }
+      const request = args.trim();
+      if (request) {
+        if (job) { if (ctx.hasUI) ctx.ui.notify("Сначала заверши или отмени текущий Humanizer draft.", "warning"); return; }
+        activateTools(pi);
+        pi.sendUserMessage(`/skill:humanizer-ru ${request}`, ctx.isIdle()
+          ? { expandPromptTemplates: true }
+          : { deliverAs: "followUp", expandPromptTemplates: true });
+        return;
+      }
       if (job) { if (ctx.hasUI) ctx.ui.notify("Сначала заверши или отмени текущий Humanizer draft.", "warning"); return; }
       const source = latestAssistant(ctx);
       if (!source) { if (ctx.hasUI) ctx.ui.notify("Не найдено подходящее assistant-сообщение для редакции.", "warning"); return; }
@@ -243,6 +251,11 @@ export function installHumanizer(pi: ExtensionAPI): void {
   });
 
   pi.on("input", (event) => {
+    const suffix = event.source === "extension" ? null : event.text.match(/^(.*?)\s+\/ru-clean\s*$/s);
+    if (suffix?.[1].trim()) {
+      activateTools(pi);
+      return { action: "transform", text: `/skill:humanizer-ru ${suffix[1].trim()}` };
+    }
     if (/^\s*\/skill:humanizer-ru\b/.test(event.text)) activateTools(pi);
   });
 
