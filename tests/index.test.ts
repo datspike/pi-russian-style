@@ -26,6 +26,7 @@ function createHarness(statePath: string, overrides: Record<string, unknown> = {
   const notifications: Array<[string, string]> = [];
   const entries: any[] = [];
   const sent: any[] = [];
+  const sentUser: Array<{ content: unknown; options: unknown }> = [];
   const addHandler = (name: string, handler: Handler) => {
     const previous = events.get(name);
     if (!previous) { events.set(name, handler); return; }
@@ -46,14 +47,16 @@ function createHarness(statePath: string, overrides: Record<string, unknown> = {
     setActiveTools: (next: string[]) => { activeTools = next; },
     appendEntry: (_type: string, data: any) => entries.push({ type: "custom", data }),
     sendMessage: (message: any) => sent.push(message),
+    sendUserMessage: (content: unknown, options: unknown) => sentUser.push({ content, options }),
   };
   createRussianStyleExtension({ statePath, ...overrides })(pi as any);
   const ctx = {
     hasUI: true,
     ui: { setStatus: (key: string, text?: string) => statuses.push([key, text]), notify: (text: string, level: string) => notifications.push([text, level]) },
     sessionManager: { getSessionId: () => "test-session", getSessionFile: () => undefined, getEntries: () => entries, getBranch: () => entries },
+    isIdle: () => true,
   };
-  return { events, commands, tools, sent, getActiveTools: () => activeTools, statuses, notifications, entries, ctx };
+  return { events, commands, tools, sent, sentUser, getActiveTools: () => activeTools, statuses, notifications, entries, ctx };
 }
 
 describe("state", () => {
@@ -228,6 +231,48 @@ describe("extension lifecycle and commands", () => {
     expect(replaced.message.content[0].text).toContain("Humanizer · редактура сообщения source-1");
     expect(replaced.message.content[0].text).toContain(source.content[0].text);
     expect(harness.entries.find((entry) => entry.id === "source-1")?.message).toEqual(source);
+  });
+
+  test("ru-clean forwards an explicit request to the Humanizer skill without creating a chat draft", async () => {
+    const root = await mkdtemp(join(tmpdir(), "russian-style-explicit-target-"));
+    const harness = createHarness(join(root, "state.json"));
+    await harness.events.get("session_start")?.({}, harness.ctx);
+    await harness.commands.get("ru-clean").handler("исправь этот файл", harness.ctx);
+    expect(harness.sent).toHaveLength(0);
+    expect(harness.sentUser).toEqual([{
+      content: "/skill:humanizer-ru исправь этот файл",
+      options: { expandPromptTemplates: true },
+    }]);
+    expect(harness.getActiveTools()).toContain("humanizer_create_draft");
+    const draft = await harness.tools.get("humanizer_create_draft").execute("create", { text: "Текст файла.", sourceLabel: "file" }, undefined);
+    expect(draft.isError).toBe(false);
+    const publish = await harness.tools.get("humanizer_publish").execute("publish", {}, undefined);
+    expect(publish.isError).toBe(true);
+    expect(publish.content[0].text).toContain("примени его обычным edit");
+  });
+
+  test("ru-clean queues an explicit request after an active turn", async () => {
+    const root = await mkdtemp(join(tmpdir(), "russian-style-explicit-target-follow-up-"));
+    const harness = createHarness(join(root, "state.json"));
+    await harness.events.get("session_start")?.({}, harness.ctx);
+    await harness.commands.get("ru-clean").handler("исправь этот файл", { ...harness.ctx, isIdle: () => false });
+    expect(harness.sentUser).toEqual([{
+      content: "/skill:humanizer-ru исправь этот файл",
+      options: { deliverAs: "followUp", expandPromptTemplates: true },
+    }]);
+    expect(harness.getActiveTools()).toContain("humanizer_create_draft");
+  });
+
+  test("ru-clean suffix transforms a natural request into the Humanizer skill", async () => {
+    const root = await mkdtemp(join(tmpdir(), "russian-style-suffix-target-"));
+    const harness = createHarness(join(root, "state.json"));
+    await harness.events.get("session_start")?.({}, harness.ctx);
+    const result = await harness.events.get("input")?.({
+      text: "проверь этот док /ru-clean ",
+      source: "interactive",
+    }, harness.ctx);
+    expect(result).toEqual({ action: "transform", text: "/skill:humanizer-ru проверь этот док" });
+    expect(harness.getActiveTools()).toContain("humanizer_create_draft");
   });
 
   test("ru-clean ignores a nonterminal assistant message when selecting its source", async () => {
