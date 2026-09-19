@@ -1,0 +1,76 @@
+{
+  "schema": "pi-russian-style-message-end-benchmark/v1",
+  "generated_at": "2026-09-03T22:34:47.517Z",
+  "runtime": {
+    "bun": "1.3.13",
+    "platform": "linux",
+    "arch": "x64"
+  },
+  "workload": {
+    "short_chars": 284,
+    "long_chars": 13350
+  },
+  "critical_path": {
+    "scope": "synchronous message_end admission; overloaded calls may be dropped by the bounded queue",
+    "baseline": {
+      "iterations": 5000,
+      "average_us": 0.028202599999999477,
+      "p50_us": 0.021000000000270802,
+      "p95_us": 0.02999999999886427,
+      "p99_us": 0.11199999999966792,
+      "max_us": 16.605000000000203
+    },
+    "short": {
+      "iterations": 5000,
+      "average_us": 6.292831400000021,
+      "p50_us": 5.497999999995784,
+      "p95_us": 9.267000000001246,
+      "p99_us": 12.710000000001997,
+      "max_us": 553.4059999999989
+    },
+    "long": {
+      "iterations": 1000,
+      "average_us": 186.7326109999995,
+      "p50_us": 174.29899999999066,
+      "p95_us": 213.5979999999904,
+      "p99_us": 572.8560000000016,
+      "max_us": 730.7889999999873
+    }
+  },
+  "background_processing": {
+    "humanizer_status": "ok",
+    "short": {
+      "iterations": 5,
+      "average_us": 18038.11899999999,
+      "p50_us": 17987.767000000018,
+      "p95_us": 18757.007999999983,
+      "p99_us": 18757.007999999983,
+      "max_us": 18757.007999999983
+    },
+    "long": {
+      "iterations": 5,
+      "average_us": 24778.695200000016,
+      "p50_us": 23504.48399999999,
+      "p95_us": 28747.99200000001,
+      "p99_us": 28747.99200000001,
+      "max_us": 28747.99200000001
+    }
+  },
+  "queue_load": {
+    "queue_limit": 8,
+    "submitted": 100,
+    "accepted": 8,
+    "completed": 8,
+    "dropped": 92,
+    "failed": 0,
+    "pending": 0,
+    "active": false,
+    "maximum_workers": 1
+  },
+  "heap_delta_bytes_before_worker": 5318574,
+  "acceptance_budget": {
+    "p95_us": 2000,
+    "heap_delta_bytes": 10485760,
+    "result": "pass"
+  }
+}

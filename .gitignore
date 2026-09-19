@@ -1,0 +1,16 @@
+node_modules/
+*.tmp
+.DS_Store
+.runtime/
+__pycache__/
+.pi/
+.pytest_cache/
+.task_files/
+research/
+docs/research/
+docs/roadmap.md
+tests/context_study_test.py
+tests/history_analysis_test.py
+tests/label_summary_test.py
+tests/paired_context_test.py
+tests/research_results_test.py

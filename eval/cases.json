@@ -1,0 +1,115 @@
+{
+  "name": "russian-style-runtime",
+  "kind": "private_local_eval",
+  "version": 2,
+  "cases": [
+    {
+      "id": "industry-text-only",
+      "prompt": "Перепиши технические комментарии, не меняя логику и API. Исходные формулировки: `legacy venv: forecast/venv`, `direct requirements`, `runtime transitive dependency`, `unique paths`. Пути `forecast/venv` и `industry/venv`, а также имя `requirements` сохрани точно. Верни короткий список исправленных формулировок.",
+      "expected_properties": ["меняется только свободный текст", "пути и имя файла сохранены", "лишние английские маркеры удалены"],
+      "exact_spans": ["forecast/venv", "industry/venv", "requirements"],
+      "avoid_terms": ["legacy", "direct", "unique paths", "runtime transitive dependency"],
+      "expected_language": "ru",
+      "external_text": false,
+      "max_chars": 900,
+      "profanity_boundary": "обычный рабочий ответ без мата",
+      "provenance": ["source:style-001"]
+    },
+    {
+      "id": "firmware-report",
+      "prompt": "Составь короткий технический отчёт. Проверена модификация `VCU` версии `1.6.2`: в режиме `Sport` снято региональное ограничение скорости, ограничения `Eco` и `Drive` сохранены. Для `MCU` подтверждена совместимость с этой модификацией. Другие версии `VCU` не проверялись. Отдели проверенные факты от оставшихся ограничений.",
+      "expected_properties": ["сначала результат", "факты отделены от ограничений", "технические названия сохранены"],
+      "exact_spans": ["VCU", "1.6.2", "Sport", "Eco", "Drive", "MCU"],
+      "avoid_terms": ["review", "status", "runtime", "scope", "pipeline"],
+      "expected_language": "ru",
+      "external_text": false,
+      "max_chars": 900,
+      "profanity_boundary": "технический отчёт без мата",
+      "provenance": ["source:style-002"]
+    },
+    {
+      "id": "status-question",
+      "prompt": "Перепиши статус нормальным русским языком. Факты: проверка завершена; причина сбоя — пустой `DATABASE_URL`; исправление ещё не применено; от пользователя нужно решение, можно ли менять настройки окружения. Сначала скажи, что произошло и каков результат, затем задай один вопрос. Не уходи во внутреннее устройство.",
+      "expected_properties": ["понятный итог", "причина названа", "один явный вопрос"],
+      "exact_spans": ["DATABASE_URL"],
+      "avoid_terms": ["status", "implementation", "open question", "workflow", "root cause"],
+      "expected_language": "ru",
+      "external_text": false,
+      "max_chars": 700,
+      "profanity_boundary": "обычный ответ без мата",
+      "provenance": ["source:style-003"]
+    },
+    {
+      "id": "short-humanizer",
+      "prompt": "Перепиши сообщение кратко и по-человечески: «В рамках проведённой проверки было осуществлено подтверждение корректности результата, в связи с чем представляется возможным перейти к следующему этапу». Смысл: проверка прошла, можно продолжать.",
+      "expected_properties": ["одна короткая фраза", "смысл сохранён", "канцелярит удалён"],
+      "exact_spans": [],
+      "avoid_terms": ["в рамках", "осуществлено", "представляется возможным", "следующий этап"],
+      "expected_language": "ru",
+      "external_text": false,
+      "max_chars": 240,
+      "profanity_boundary": "пользовательское сообщение без мата",
+      "provenance": ["source:style-004"]
+    },
+    {
+      "id": "friendly-disclaimer",
+      "prompt": "Верни только один fenced-блок `markdown` с дружеским техническим предупреждением для внешнего сообщения. Укажи: перед прошивкой `VCU` и `MCU` нужна резервная копия ключей; без неё можно навсегда потерять обновления; ответственность за установку остаётся у пользователя. Пиши литературно и без мата.",
+      "expected_properties": ["все риски сохранены", "только внешний текст", "нет мата"],
+      "exact_spans": ["VCU", "MCU"],
+      "avoid_terms": ["disclaimer", "backup", "flash", "firmware"],
+      "expected_language": "ru",
+      "external_text": true,
+      "max_chars": 1000,
+      "profanity_boundary": "внешний текст строго без мата",
+      "provenance": ["source:style-005"]
+    },
+    {
+      "id": "explicit-english",
+      "prompt": "Write the final answer in English only. Give two concise sentences. Preserve `API` and the exact phrase `manual verification`. State that the check passed and manual verification is the next step.",
+      "expected_properties": ["ответ только по-английски", "две короткие фразы", "технический термин сохранён"],
+      "exact_spans": ["API", "manual verification"],
+      "avoid_terms": [],
+      "expected_language": "en",
+      "external_text": false,
+      "max_chars": 500,
+      "profanity_boundary": "без мата",
+      "provenance": ["source:style-006"]
+    },
+    {
+      "id": "compaction-identifier",
+      "prompt": "Продолжи работу после сжатия контекста. Сводка говорит, что нужно обновить `draft_5742`, но последнее уточнение пользователя исправляет цель: обновить нужно только `draft_5743`; `draft_5742` уже на месте и повторно проверять его не надо. Одним абзацем подтверди ближайшее действие без нового плана.",
+      "expected_properties": ["использован исправленный идентификатор", "старый объект не предлагается проверять", "нет перепланирования"],
+      "exact_spans": ["draft_5743", "draft_5742"],
+      "avoid_terms": ["compaction", "follow-up", "runtime", "token", "replan"],
+      "expected_language": "ru",
+      "external_text": false,
+      "max_chars": 600,
+      "profanity_boundary": "рабочее подтверждение без мата",
+      "provenance": ["source:style-007"]
+    },
+    {
+      "id": "user-effect",
+      "prompt": "Объясни изменение через пользовательский эффект. При включённом `sync_mode` сохранение может занять до десяти секунд; интерфейс и формат данных не меняются; решение о включении принимает оператор перед развёртыванием. Сначала скажи, что заметит человек, затем назови неизменную часть и момент решения.",
+      "expected_properties": ["сначала наблюдаемый эффект", "неизменная часть названа", "решение привязано к оператору"],
+      "exact_spans": ["sync_mode"],
+      "avoid_terms": ["architecture", "product experience", "implementation", "pipeline", "user-facing"],
+      "expected_language": "ru",
+      "external_text": false,
+      "max_chars": 700,
+      "profanity_boundary": "объяснение без мата",
+      "provenance": ["source:style-008"]
+    },
+    {
+      "id": "api-contract-language",
+      "prompt": "Отредактируй описание API. Методы `prepare` и `upload_signature` используют поле `fingerprint`: в кодовом имени сохрани его точно, а в свободном тексте называй отпечатком. Объясни проверку актуальности данных и общий контракт ошибок нормальным русским языком. Конкретные HTTP-статусы, коды ошибок и правила повторного запроса не заданы — не выдумывай их. Верни один короткий абзац.",
+      "expected_properties": ["имена API сохранены", "английское имя поля не переносится в обычную прозу", "ошибки описаны по-русски"],
+      "exact_spans": ["prepare", "upload_signature", "fingerprint"],
+      "avoid_terms": ["currentness", "error-контракт", "API contract"],
+      "expected_language": "ru",
+      "external_text": false,
+      "max_chars": 800,
+      "profanity_boundary": "описание API без мата",
+      "provenance": ["source:style-009"]
+    }
+  ]
+}

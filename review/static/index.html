@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Разметка ответов Pi</title>
+  <style>
+    :root { color-scheme: light; --ink:#24221f; --muted:#77716a; --paper:#f7f3eb; --card:#fffdf8; --line:#ddd5c8; --accent:#2e6455; --yellow:#ffe878; }
+    * { box-sizing:border-box; }
+    body { margin:0; font:16px/1.55 system-ui,-apple-system,sans-serif; color:var(--ink); background:var(--paper); }
+    header { position:sticky; top:0; z-index:10; padding:14px 22px; background:rgba(247,243,235,.96); border-bottom:1px solid var(--line); backdrop-filter:blur(10px); }
+    .top { max-width:1100px; margin:auto; display:flex; gap:24px; align-items:flex-start; }
+    .group { flex:1; }
+    .label { margin-bottom:6px; color:var(--muted); font-size:12px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; }
+    .buttons { display:flex; flex-wrap:wrap; gap:7px; }
+    button { border:1px solid var(--line); border-radius:9px; padding:8px 13px; color:var(--ink); background:var(--card); cursor:pointer; font:inherit; }
+    button:hover { border-color:#aaa197; }
+    button.selected { border-color:var(--accent); color:white; background:var(--accent); }
+    button.danger.selected { border-color:#963f36; background:#963f36; }
+    main { max-width:1100px; margin:24px auto 100px; padding:0 22px; }
+    .meta { display:flex; justify-content:space-between; color:var(--muted); font-size:14px; margin-bottom:12px; }
+    .answer { min-height:300px; padding:28px 32px; white-space:pre-wrap; overflow-wrap:anywhere; background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:0 5px 24px rgba(58,48,34,.06); user-select:text; }
+    mark { padding:1px 0; color:inherit; background:var(--yellow); cursor:pointer; border-bottom:2px solid #d3aa18; }
+    .hint { margin:10px 3px; color:var(--muted); font-size:14px; }
+    .footer { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:18px; }
+    .nav { display:flex; gap:8px; }
+    .primary { color:white; border-color:var(--accent); background:var(--accent); }
+    .primary:disabled { opacity:.4; cursor:not-allowed; }
+    .save { min-width:130px; color:var(--muted); text-align:center; }
+    details { margin-top:18px; padding:12px 16px; border:1px solid var(--line); border-radius:10px; color:var(--muted); background:#fbf8f1; }
+    details pre { white-space:pre-wrap; font-size:13px; }
+    .empty { padding:80px 20px; text-align:center; color:var(--muted); }
+    @media (max-width:760px) { .top { flex-direction:column; gap:12px; } header { position:static; } .answer { padding:20px; } .footer { flex-wrap:wrap; } }
+  </style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <section class="group">
+      <div class="label">Общая оценка · клавиши 1–3</div>
+      <div class="buttons" id="overall">
+        <button data-value="good">1 · Хороший</button>
+        <button data-value="acceptable">2 · Приемлемый</button>
+        <button class="danger" data-value="poor">3 · Плохой</button>
+      </div>
+    </section>
+    <section class="group">
+      <div class="label">Полезность решения · клавиши 4–7</div>
+      <div class="buttons" id="usefulness">
+        <button data-value="correct">4 · Верное</button>
+        <button data-value="partial">5 · Частично</button>
+        <button data-value="false_positive">6 · Ложное</button>
+        <button data-value="missed">7 · Пропуск</button>
+      </div>
+    </section>
+  </div>
+</header>
+<main>
+  <div id="loading" class="empty">Загружаю выборку…</div>
+  <section id="review" hidden>
+    <div class="meta"><span id="progress"></span><span id="summary"></span></div>
+    <article class="answer" id="answer"></article>
+    <div class="hint">Выдели мышкой плохую формулировку — она станет жёлтой. Щёлкни по жёлтому фрагменту, чтобы убрать выделение.</div>
+    <div class="footer">
+      <div class="nav">
+        <button id="previous">← Назад</button>
+        <button id="skip">Пропустить</button>
+      </div>
+      <div class="save" id="save-state">Не изменено</div>
+      <button class="primary" id="next">Следующий →</button>
+    </div>
+    <details id="diagnostic"><summary>Что решила диагностика</summary><pre></pre></details>
+  </section>
+</main>
+<script>
+const state = { items: [], index: 0, annotation: null, saving: null };
+const answer = document.querySelector('#answer');
+const overall = document.querySelector('#overall');
+const usefulness = document.querySelector('#usefulness');
+const saveState = document.querySelector('#save-state');
+
+function freshAnnotation(item) {
+  return item.annotation || { id:item.id, text_sha256:item.text_sha256, overall:null, usefulness:null, ranges:[] };
+}
+function normalizedRanges(ranges) {
+  return ranges.slice().sort((a,b) => a.start-b.start || a.end-b.end).reduce((result, item) => {
+    const last = result.at(-1);
+    if (last && item.start <= last.end) last.end = Math.max(last.end, item.end);
+    else result.push({ start:item.start, end:item.end });
+    return result;
+  }, []);
+}
+function renderText() {
+  const item = state.items[state.index];
+  answer.replaceChildren();
+  let cursor = 0;
+  for (const range of normalizedRanges(state.annotation.ranges)) {
+    if (cursor < range.start) answer.append(document.createTextNode(item.text.slice(cursor, range.start)));
+    const mark = document.createElement('mark');
+    mark.textContent = item.text.slice(range.start, range.end);
+    mark.dataset.start = range.start;
+    mark.dataset.end = range.end;
+    mark.title = 'Щёлкни, чтобы убрать выделение';
+    answer.append(mark);
+    cursor = range.end;
+  }
+  if (cursor < item.text.length) answer.append(document.createTextNode(item.text.slice(cursor)));
+}
+function setButtons(container, value) {
+  for (const button of container.querySelectorAll('button')) button.classList.toggle('selected', button.dataset.value === value);
+}
+function completedCount() { return state.items.filter(item => item.annotation?.overall).length; }
+function render() {
+  const item = state.items[state.index];
+  state.annotation = freshAnnotation(item);
+  setButtons(overall, state.annotation.overall);
+  setButtons(usefulness, state.annotation.usefulness);
+  renderText();
+  document.querySelector('#progress').textContent = `${state.index + 1} / ${state.items.length}`;
+  document.querySelector('#summary').textContent = `Оценено: ${completedCount()}`;
+  document.querySelector('#previous').disabled = state.index === 0;
+  document.querySelector('#next').disabled = !state.annotation.overall;
+  document.querySelector('#diagnostic pre').textContent = JSON.stringify(item.diagnostic, null, 2);
+  saveState.textContent = item.annotation ? 'Сохранено' : 'Не оценено';
+}
+async function save() {
+  const item = state.items[state.index];
+  item.annotation = structuredClone(state.annotation);
+  document.querySelector('#next').disabled = !state.annotation.overall;
+  saveState.textContent = 'Сохраняю…';
+  const payload = structuredClone(state.annotation);
+  const previous = state.saving || Promise.resolve();
+  const request = previous.catch(() => {}).then(() =>
+    fetch('/api/annotation', { method:'POST', keepalive:true, headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) })
+      .then(async response => { if (!response.ok) throw new Error((await response.json()).error); return response.json(); })
+      .then(saved => { item.annotation = saved; saveState.textContent = 'Сохранено'; document.querySelector('#summary').textContent = `Оценено: ${completedCount()}`; })
+      .catch(error => { saveState.textContent = `Ошибка: ${error.message}`; })
+  );
+  state.saving = request;
+  await request;
+  if (state.saving === request) state.saving = null;
+}
+function choose(container, field, value) {
+  state.annotation[field] = value;
+  setButtons(container, value);
+  void save();
+}
+overall.addEventListener('click', event => { if (event.target.dataset.value) choose(overall, 'overall', event.target.dataset.value); });
+usefulness.addEventListener('click', event => { if (event.target.dataset.value) choose(usefulness, 'usefulness', event.target.dataset.value); });
+answer.addEventListener('mouseup', () => {
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed || !selection.rangeCount) return;
+  const selected = selection.getRangeAt(0);
+  if (!answer.contains(selected.commonAncestorContainer)) return;
+  const prefix = document.createRange();
+  prefix.selectNodeContents(answer);
+  prefix.setEnd(selected.startContainer, selected.startOffset);
+  const start = prefix.toString().length;
+  const end = start + selected.toString().length;
+  selection.removeAllRanges();
+  if (end <= start) return;
+  state.annotation.ranges = normalizedRanges([...state.annotation.ranges, {start,end}]);
+  renderText();
+  void save();
+});
+answer.addEventListener('click', event => {
+  const mark = event.target.closest('mark');
+  if (!mark) return;
+  const start = Number(mark.dataset.start), end = Number(mark.dataset.end);
+  state.annotation.ranges = state.annotation.ranges.filter(range => range.start !== start || range.end !== end);
+  renderText();
+  void save();
+});
+async function move(delta) {
+  if (state.saving) await state.saving;
+  const target = Math.max(0, Math.min(state.items.length - 1, state.index + delta));
+  if (target !== state.index) { state.index = target; render(); scrollTo({top:0, behavior:'smooth'}); }
+}
+document.querySelector('#previous').onclick = () => { void move(-1); };
+document.querySelector('#next').onclick = () => { if (state.annotation.overall) void move(1); };
+document.querySelector('#skip').onclick = () => { void move(1); };
+document.addEventListener('keydown', event => {
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
+  const maps = { '1':['overall','good'], '2':['overall','acceptable'], '3':['overall','poor'], '4':['usefulness','correct'], '5':['usefulness','partial'], '6':['usefulness','false_positive'], '7':['usefulness','missed'] };
+  if (maps[event.key]) {
+    const [field,value] = maps[event.key]; choose(field === 'overall' ? overall : usefulness, field, value);
+  } else if (event.key === 'ArrowLeft') void move(-1);
+  else if (event.key === 'ArrowRight' && state.annotation.overall) void move(1);
+});
+fetch('/api/sample').then(response => response.json()).then(data => {
+  state.items = data.items;
+  document.querySelector('#loading').hidden = true;
+  document.querySelector('#review').hidden = false;
+  if (!state.items.length) throw new Error('Выборка пуста');
+  const firstUnrated = state.items.findIndex(item => !item.annotation?.overall);
+  state.index = firstUnrated < 0 ? 0 : firstUnrated;
+  render();
+}).catch(error => { document.querySelector('#loading').textContent = `Не удалось загрузить выборку: ${error.message}`; });
+</script>
+</body>
+</html>
