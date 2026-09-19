@@ -1,0 +1,43 @@
+{
+  "name": "pi-russian-style",
+  "version": "0.1.0",
+  "description": "Russian technical writing layer and interactive Humanizer workflow for Pi",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/datspike/pi-russian-style.git"
+  },
+  "bugs": {
+    "url": "https://github.com/datspike/pi-russian-style/issues"
+  },
+  "homepage": "https://github.com/datspike/pi-russian-style#readme",
+  "keywords": [
+    "pi-package",
+    "russian",
+    "writing",
+    "humanizer"
+  ],
+  "packageManager": "bun@1.3.13",
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "scripts": {
+    "test": "bun test tests",
+    "typecheck": "tsc --noEmit --strict --target ES2022 --module ES2022 --moduleResolution bundler --skipLibCheck src/*.ts tests/*.test.ts review/evaluate-rules.ts",
+    "check": "bash run-checks.sh"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@types/bun": "1.3.11",
+    "@types/node": "22.19.19",
+    "typescript": "5.9.3"
+  }
+}
