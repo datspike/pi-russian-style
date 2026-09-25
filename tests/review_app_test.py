@@ -85,6 +85,49 @@ class ReviewAppTest(unittest.TestCase):
             self.assertEqual(review_app.load_texts([record], root), {("answer-1", digest): text})
             self.assertEqual(review_app.load_texts([{**record, "provider": "wrong"}], root), {})
 
+    def test_source_request_follows_verified_answer_branch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            text = "Русский ответ"
+            digest = hashlib.sha256(text.encode()).hexdigest()
+            record = {
+                "session_id": "session-1", "entry_id": "answer-1", "text_sha256": digest,
+                "message_timestamp": 100, "provider": "provider", "model": "model",
+            }
+            rows = [
+                {"type": "session", "id": "session-1"},
+                {"type": "message", "id": "user-old", "parentId": None, "message": {
+                    "role": "user", "content": [{"type": "text", "text": "Старый запрос"}],
+                }},
+                {"type": "message", "id": "answer-old", "parentId": "user-old", "message": {
+                    "role": "assistant", "stopReason": "stop",
+                    "content": [{"type": "text", "text": "Предыдущий ответ"}],
+                }},
+                {"type": "message", "id": "user-right", "parentId": "answer-old", "message": {
+                    "role": "user", "content": [{"type": "text", "text": "Проверь <API>"}],
+                }},
+                {"type": "message", "id": "user-wrong-branch", "parentId": "user-old", "message": {
+                    "role": "user", "content": "Другой запрос",
+                }},
+                {"type": "message", "id": "answer-1", "parentId": "user-right", "message": {
+                    "role": "assistant", "timestamp": 100, "provider": "provider", "model": "model",
+                    "content": [{"type": "text", "text": text}],
+                }},
+            ]
+            (root / "run_session-1.jsonl").write_text(
+                "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n", encoding="utf-8"
+            )
+            expected = {("answer-1", digest): {
+                "request": "Проверь <API>", "previous_answer": "Предыдущий ответ",
+            }}
+            self.assertEqual(review_app.load_source_contexts([record], root), expected)
+            self.assertEqual(review_app.load_source_contexts([{**record, "model": "wrong"}], root), {})
+            app = review_app.ReviewApplication([record], {("answer-1", digest): text},
+                                               root / "annotations.json", expected)
+            self.assertEqual(app.items[0]["source_request"], "Проверь <API>")
+            self.assertEqual(app.items[0]["previous_answer"], "Предыдущий ответ")
+
+
     def test_annotation_ranges_are_validated_and_saved(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "annotations.json"
@@ -92,6 +135,8 @@ class ReviewAppTest(unittest.TestCase):
             text = "Ответ answer-1"
             app = review_app.ReviewApplication([record], {("answer-1", record["text_sha256"]): text}, output)
             item = app.items[0]
+            self.assertIsNone(item["source_request"])
+            self.assertIsNone(item["previous_answer"])
             stored = app.save({
                 "id": item["id"], "text_sha256": item["text_sha256"],
                 "overall": "poor", "usefulness": "correct", "ranges": [{"start": 0, "end": 5}],

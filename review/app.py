@@ -303,6 +303,76 @@ def load_texts(records: list[dict[str, Any]], sessions_root: Path) -> dict[tuple
     return texts
 
 
+def load_source_contexts(records: list[dict[str, Any]], sessions_root: Path) -> dict[tuple[str, str], dict[str, str | None]]:
+    """Find the request and preceding finished answer on each verified session branch."""
+    by_session: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for record in records:
+        if isinstance(record.get("session_id"), str):
+            by_session[record["session_id"]].append(record)
+    contexts: dict[tuple[str, str], dict[str, str | None]] = {}
+    if not by_session:
+        return contexts
+    for path in sessions_root.rglob("*.jsonl"):
+        session_id = next((sid for sid in by_session if path.name.endswith(f"_{sid}.jsonl")), None)
+        if not session_id:
+            continue
+        parents: dict[str, str | None] = {}
+        user_messages: dict[str, str] = {}
+        previous_answers: dict[str, str] = {}
+        targets: dict[str, dict[str, Any]] = {row["entry_id"]: row for row in by_session[session_id]}
+        verified: set[str] = set()
+        with path.open(encoding="utf-8") as source:
+            header = json.loads(next(source))
+            if header.get("type") != "session" or header.get("id") != session_id:
+                continue
+            for line in source:
+                entry = json.loads(line)
+                entry_id = entry.get("id")
+                if not isinstance(entry_id, str):
+                    continue
+                parents[entry_id] = entry.get("parentId")
+                if entry.get("type") != "message":
+                    continue
+                message = entry.get("message", {})
+                if message.get("role") == "user":
+                    content = message.get("content")
+                    text = content if isinstance(content, str) else "\n".join(
+                        block.get("text", "") for block in content or []
+                        if isinstance(block, dict) and block.get("type") == "text"
+                        and isinstance(block.get("text"), str)
+                    )
+                    if text.strip():
+                        user_messages[entry_id] = text
+                elif message.get("role") == "assistant":
+                    if message.get("stopReason") == "stop":
+                        previous_answers[entry_id] = assistant_text(message)
+                    if entry_id in targets:
+                        record = targets[entry_id]
+                        if (message.get("timestamp") == record.get("message_timestamp")
+                                and message.get("provider") == record.get("provider")
+                                and message.get("model") == record.get("model")
+                                and hashlib.sha256(assistant_text(message).encode()).hexdigest() == record.get("text_sha256")):
+                            verified.add(entry_id)
+        for entry_id in verified:
+            seen: set[str] = set()
+            cursor = parents.get(entry_id)
+            while isinstance(cursor, str) and cursor not in seen:
+                seen.add(cursor)
+                if cursor in user_messages:
+                    record = targets[entry_id]
+                    previous = parents.get(cursor)
+                    while isinstance(previous, str) and previous not in seen and previous not in previous_answers:
+                        seen.add(previous)
+                        previous = parents.get(previous)
+                    contexts[(entry_id, record["text_sha256"])] = {
+                        "request": user_messages[cursor],
+                        "previous_answer": previous_answers.get(previous),
+                    }
+                    break
+                cursor = parents.get(cursor)
+    return contexts
+
+
 def load_annotations(path: Path) -> dict[str, dict[str, Any]]:
     if not path.exists():
         return {}
@@ -327,11 +397,13 @@ def write_annotations(path: Path, annotations: dict[str, dict[str, Any]]) -> Non
 
 
 class ReviewApplication:
-    def __init__(self, records: list[dict[str, Any]], texts: dict[tuple[str, str], str], output: Path):
+    def __init__(self, records: list[dict[str, Any]], texts: dict[tuple[str, str], str], output: Path,
+                 source_contexts: dict[tuple[str, str], dict[str, str | None]] | None = None):
         self.output = output
         self.annotations = load_annotations(output)
         self.save_lock = Lock()
         self.items: list[dict[str, Any]] = []
+        source_contexts = source_contexts or {}
         for index, record in enumerate(records):
             key = (record["entry_id"], record["text_sha256"])
             text = texts.get(key)
@@ -342,6 +414,8 @@ class ReviewApplication:
                 "id": item_id,
                 "index": index,
                 "text": text,
+                "source_request": source_contexts.get(key, {}).get("request"),
+                "previous_answer": source_contexts.get(key, {}).get("previous_answer"),
                 "text_sha256": record["text_sha256"],
                 "category": sample_category(record),
                 "diagnostic": {
@@ -467,7 +541,8 @@ def main() -> None:
             raise SystemExit("Не все тексты фиксированной выборки доступны; состав не изменён")
         # Перемешиваем позиции; метаданные остаются в свёрнутой диагностике.
         records = sorted(records, key=stable_order)
-    application = ReviewApplication(records, all_texts, args.output)
+    source_contexts = load_source_contexts(records, args.sessions)
+    application = ReviewApplication(records, all_texts, args.output, source_contexts)
     if not application.items:
         raise SystemExit("No diagnostic texts could be reconstructed from Pi sessions")
     server = ThreadingHTTPServer((args.host, args.port), make_handler(application))

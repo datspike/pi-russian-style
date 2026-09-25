@@ -59,6 +59,8 @@
   <div id="loading" class="empty">Загружаю выборку…</div>
   <section id="review" hidden>
     <div class="meta"><span id="progress"></span><span id="summary"></span></div>
+    <details id="source"><summary>Исходный запрос пользователя</summary><pre id="source-request"></pre></details>
+    <details id="prior" hidden><summary>Предыдущий ответ в этой ветке</summary><pre id="previous-answer"></pre></details>
     <article class="answer" id="answer"></article>
     <div class="hint">Выдели мышкой плохую формулировку — она станет жёлтой. Щёлкни по жёлтому фрагменту, чтобы убрать выделение.</div>
     <div class="footer">
@@ -116,6 +118,9 @@ function render() {
   setButtons(overall, state.annotation.overall);
   setButtons(usefulness, state.annotation.usefulness);
   renderText();
+  document.querySelector('#source-request').textContent = item.source_request || 'Запрос не восстановлен';
+  document.querySelector('#prior').hidden = !item.previous_answer;
+  document.querySelector('#previous-answer').textContent = item.previous_answer || '';
   document.querySelector('#progress').textContent = `${state.index + 1} / ${state.items.length}`;
   document.querySelector('#summary').textContent = `Оценено: ${completedCount()}`;
   document.querySelector('#previous').disabled = state.index === 0;
