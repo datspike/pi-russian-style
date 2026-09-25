@@ -20,6 +20,7 @@
     main { max-width:1100px; margin:24px auto 100px; padding:0 22px; }
     .meta { display:flex; justify-content:space-between; color:var(--muted); font-size:14px; margin-bottom:12px; }
     .answer { min-height:300px; padding:28px 32px; white-space:pre-wrap; overflow-wrap:anywhere; background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:0 5px 24px rgba(58,48,34,.06); user-select:text; }
+    .answer .non-cyrillic { background:rgba(234,122,158,.12); border-radius:2px; }
     mark { padding:1px 0; color:inherit; background:var(--yellow); cursor:pointer; border-bottom:2px solid #d3aa18; }
     .hint { margin:10px 3px; color:var(--muted); font-size:14px; }
     .footer { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:18px; }
@@ -62,7 +63,7 @@
     <details id="source"><summary>Исходный запрос пользователя</summary><pre id="source-request"></pre></details>
     <details id="prior" hidden><summary>Предыдущий ответ в этой ветке</summary><pre id="previous-answer"></pre></details>
     <article class="answer" id="answer"></article>
-    <div class="hint">Выдели мышкой плохую формулировку — она станет жёлтой. Щёлкни по жёлтому фрагменту, чтобы убрать выделение.</div>
+    <div class="hint">Мягкий розовый фон отмечает слова не на кириллице, но сам по себе не означает ошибку. Выдели мышкой плохую формулировку — она станет жёлтой. Щёлкни по жёлтому фрагменту, чтобы убрать выделение.</div>
     <div class="footer">
       <div class="nav">
         <button id="previous">← Назад</button>
@@ -92,12 +93,30 @@ function normalizedRanges(ranges) {
     return result;
   }, []);
 }
+function appendTintedText(text) {
+  let cursor = 0;
+  for (const match of text.matchAll(/[\p{L}\p{M}\p{N}_]+/gu)) {
+    if (match.index > cursor) answer.append(document.createTextNode(text.slice(cursor, match.index)));
+    for (const part of match[0].split(/(\p{Script=Cyrillic}+)/u)) {
+      if (!part) continue;
+      if (/\p{L}/u.test(part) && !/\p{Script=Cyrillic}/u.test(part)) {
+        const span = document.createElement('span');
+        span.className = 'non-cyrillic';
+        span.textContent = part;
+        answer.append(span);
+      } else answer.append(document.createTextNode(part));
+    }
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < text.length) answer.append(document.createTextNode(text.slice(cursor)));
+}
+
 function renderText() {
   const item = state.items[state.index];
   answer.replaceChildren();
   let cursor = 0;
   for (const range of normalizedRanges(state.annotation.ranges)) {
-    if (cursor < range.start) answer.append(document.createTextNode(item.text.slice(cursor, range.start)));
+    if (cursor < range.start) appendTintedText(item.text.slice(cursor, range.start));
     const mark = document.createElement('mark');
     mark.textContent = item.text.slice(range.start, range.end);
     mark.dataset.start = range.start;
@@ -106,7 +125,7 @@ function renderText() {
     answer.append(mark);
     cursor = range.end;
   }
-  if (cursor < item.text.length) answer.append(document.createTextNode(item.text.slice(cursor)));
+  if (cursor < item.text.length) appendTintedText(item.text.slice(cursor));
 }
 function setButtons(container, value) {
   for (const button of container.querySelectorAll('button')) button.classList.toggle('selected', button.dataset.value === value);
