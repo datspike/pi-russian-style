@@ -145,6 +145,16 @@ describe("prompt", () => {
     expect(applyRussianStylePrompt("base", "Проверь endpoint и напиши вывод", true)).toContain(RUSSIAN_STYLE_PROMPT_MARKER);
   });
 
+  test("clarifies actions without replacing exact technical names in the injected prompt", () => {
+    const prompt = applyRussianStylePrompt("base", "Объясни результат", true);
+    expect(prompt).toContain("Если замена отдельных английских слов русскими не делает фразу понятнее читателю");
+    expect(prompt).toContain("перестрой её: назови действие или состояние и его предмет");
+    expect(prompt).toContain("Сохраняй точные технические имена, факты и существенные оговорки");
+    expect(prompt).toContain("Уже понятную фразу не усложняй пояснениями");
+    expect(applyRussianStylePrompt("base", "Объясни результат", false)).toBe("base");
+    expect(applyRussianStylePrompt("base", "answer in English", true)).toBe("base");
+  });
+
   test("adds exactly one block, preserves pohuy and skips explicit English", () => {
     const pohuy = "base\n<!-- pohuy-mode -->\npohuy\n<!-- /pohuy-mode -->";
     const first = applyRussianStylePrompt(pohuy, "Подготовь отчёт", true);
