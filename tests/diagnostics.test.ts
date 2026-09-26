@@ -90,4 +90,14 @@ describe("humanizer process", () => {
     expect(formal.warnings).toBeLessThan(violation.warnings);
     expect(formal.findings.map((item) => item.rule)).not.toContain("23 длинное тире");
   });
+
+  test("keeps blocking lint errors distinct from background decisions", async () => {
+    const text = "Ссылка из ответа: https://example.test/?utm_source=openai";
+    const actual = await runHumanizer(text, { path: DEFAULT_HUMANIZER_PATH, timeoutMs: 1500 });
+    expect(actual.status).toBe("ok");
+    expect(actual.errors).toBe(1);
+    expect(actual.verdict).toBe("review");
+    expect(actual.findings.map((item) => item.rule)).toContain("A utm/referrer чат-бота");
+    expect(decideDiagnostic(actual, technicalSignals(text))).toBe("clean");
+  });
 });
