@@ -22,16 +22,11 @@ class HumanizerLintCliTest(unittest.TestCase):
         self.assertIn("-> review", result.stdout)
         self.assertNotIn("-> clean", result.stdout)
 
-    def test_cited_tracking_url_never_reports_clean_while_blocked(self):
-        # Решение, освобождать ли цитируемый URL, требует отдельного выбора; здесь
-        # проверяем только согласованность вердикта и гейта при любом решении.
+    def test_cited_tracking_url_remains_a_blocking_artifact(self):
         result = self.run_lint("Цитируемый адрес: «https://example.test/?utm_source=openai».")
-        if result.returncode:
-            self.assertEqual(result.returncode, 1)
-            self.assertIn("ERROR строка 1: [A utm/referrer чат-бота]", result.stdout)
-            self.assertIn("-> review", result.stdout)
-        else:
-            self.assertNotIn("ERROR", result.stdout)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("ERROR строка 1: [A utm/referrer чат-бота]", result.stdout)
+        self.assertIn("-> review", result.stdout)
 
     def test_ordinary_url_and_quoted_code_are_not_chatbot_artifacts(self):
         result = self.run_lint(
