@@ -214,10 +214,10 @@ def lint(text, *, formal=False):
 
 def verdict(errors, warnings):
     score = errors * 3 + warnings
-    if score <= 3:
+    if score <= 3 and errors == 0:
         return score, "clean"
     if score <= 10:
-        return score, "review - посмотри warnings кластерами"
+        return score, "review - исправь errors" if errors else "review - посмотри warnings кластерами"
     return score, "rewrite - слопа слишком много для точечных правок"
 
 
