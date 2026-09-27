@@ -45,10 +45,10 @@ description: Редактор русского текста: по умолчан
 
 Перед сдачей:
 
-1. Для `/ru-clean` draft уже создаёт extension: не вызывай `humanizer_create_draft`, используй `humanizer_inspect`, `humanizer_patch_draft` или `humanizer_patch_draft_set`, затем `humanizer_publish`. Patchset по умолчанию сам запускает lint новой revision; `humanizer_lint` отдельно нужен после одиночных правок, при `lintAfter: false` или для формального режима.
+1. Для `/ru-clean` draft уже создаёт extension: не вызывай `humanizer_create_draft`, используй `humanizer_inspect`, `humanizer_patch_draft` или `humanizer_patch_draft_set`, затем `humanizer_lint`, `humanizer_reader_check` и `humanizer_publish`. Patchset по умолчанию сам запускает lint новой revision; `humanizer_lint` отдельно нужен после одиночных правок, при `lintAfter: false` или для формального режима.
 2. Для файла, docstring или комментария сначала выбери точные фрагменты обычными `read`/`ast-index-nav`, затем создай draft только из них. Перед patch передавай текущую `expectedRevision`; несколько зависимых правок отправляй одним атомарным patchset.
-3. Проведи линтер по чистовику. `ERROR` исправь и повтори проверку. Любой `WARN` оцени по контексту и не называй текст чистым без reader-check; отсутствие предупреждений тоже не отменяет reader-check.
-4. Пройди ручную проверку из `reader-check.md`: сохрани факты и композицию, проверь понятность действия, механизма, ограничения и следующего шага, а также необходимость каждого английского слова.
+3. Проведи линтер по чистовику. `ERROR` исправь и повтори проверку. Любой `WARN` оцени по контексту: он сам по себе не блокирует публикацию, но перед `humanizer_publish` нужно зафиксировать `humanizer_reader_check` для текущей revision; отсутствие предупреждений тоже не отменяет reader-check.
+4. Пройди ручную проверку из `reader-check.md`: сохрани факты и композицию, проверь понятность действия, механизма, ограничения и следующего шага, а также необходимость каждого английского слова. Для chat-draft зафиксируй результат через `humanizer_reader_check` на текущей revision.
 5. Если доступны сабагенты, дай чистовик свежему читателю вместе с `references/patterns.md` и `references/reader-check.md`. Исправь только подтверждённые находки и повтори линтер и reader-check.
 
 ### Fallback без tools
