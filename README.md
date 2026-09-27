@@ -48,11 +48,11 @@ pi --no-extensions -e "$PWD"
 
 `humanizer-ru` поставляется вместе с пакетом в `skills/humanizer-ru/`. Пассивная диагностика использует его lint вне критического пути TUI, но не меняет обычные ответы.
 
-`/ru-clean` без аргументов выбирает последнее завершённое assistant-сообщение, создаёт неизменяемый source snapshot и draft. Модель применяет точные правки к draft, а `humanizer_patch_draft_set` по умолчанию сразу линтит новую revision. После успешного lint `humanizer_publish` публикует производное assistant-сообщение, не меняя источник.
+`/ru-clean` без аргументов выбирает последнее завершённое assistant-сообщение, создаёт неизменяемый source snapshot и draft. Модель применяет точные правки к draft, а `humanizer_patch_draft_set` по умолчанию сразу линтит новую revision. После успешного lint без `ERROR` и `humanizer_reader_check` для той же revision `humanizer_publish` публикует производное assistant-сообщение, не меняя источник.
 
 `/ru-clean <запрос>` передаёт явную цель в `/skill:humanizer-ru`: например, `/ru-clean исправь этот файл` или `/ru-clean сделай чище docstring в Foo`. Суффиксный вариант тоже работает: `проверь этот док /ru-clean` преобразуется в тот же skill-запрос. Модель находит нужные фрагменты обычными инструментами, создаёт staging draft и применяет правку через обычный `edit`. Для того же сценария можно вызвать `/skill:humanizer-ru` напрямую.
 
-`WARN` остаются контекстным сигналом; публикацию блокируют только `ERROR` или недоступный lint. Подробный контракт: `docs/humanizer-integration-brief.md`.
+`WARN` остаются контекстным сигналом; публикацию блокируют `ERROR`, недоступный lint или отсутствие `humanizer_reader_check` для текущей revision. Подробный контракт: `docs/humanizer-integration-brief.md`.
 
 ## Диагностика `message_end`
 
