@@ -3,7 +3,11 @@ import importlib.util
 import json
 import tempfile
 import unittest
+from http.server import ThreadingHTTPServer
 from pathlib import Path
+from threading import Thread
+from unittest.mock import patch
+from urllib.request import urlopen
 
 MODULE_PATH = Path(__file__).parents[1] / "review" / "app.py"
 SPEC = importlib.util.spec_from_file_location("review_app", MODULE_PATH)
@@ -128,6 +132,39 @@ class ReviewAppTest(unittest.TestCase):
             self.assertEqual(app.items[0]["previous_answer"], "Предыдущий ответ")
 
 
+    def test_new_page_is_served_without_restarting_or_changing_saved_ratings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            record = self.record("answer-1")
+            text = "Ответ answer-1"
+            output = root / "annotations.json"
+            app = review_app.ReviewApplication([record], {("answer-1", record["text_sha256"]): text}, output)
+            item = app.items[0]
+            saved = app.save({
+                "id": item["id"], "text_sha256": item["text_sha256"],
+                "overall": "good", "usefulness": "partial", "ranges": [],
+            })
+            original = output.read_bytes()
+            (root / "index.html").write_text("old interface", encoding="utf-8")
+            with patch.object(review_app, "STATIC_DIR", root):
+                server = ThreadingHTTPServer(("127.0.0.1", 0), review_app.make_handler(app))
+                thread = Thread(target=server.serve_forever, daemon=True)
+                thread.start()
+                try:
+                    address = f"http://127.0.0.1:{server.server_port}"
+                    with urlopen(address, timeout=3) as response:
+                        self.assertEqual(response.read(), b"old interface")
+                    (root / "index.html").write_text("new interface", encoding="utf-8")
+                    with urlopen(address, timeout=3) as response:
+                        self.assertEqual(response.read(), b"new interface")
+                    with urlopen(address + "/api/sample", timeout=3) as response:
+                        self.assertEqual(json.load(response)["items"][0]["annotation"], saved)
+                    self.assertEqual(output.read_bytes(), original)
+                finally:
+                    server.shutdown()
+                    server.server_close()
+                    thread.join(timeout=3)
+
     def test_annotation_ranges_are_validated_and_saved(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "annotations.json"
@@ -144,8 +181,10 @@ class ReviewAppTest(unittest.TestCase):
             self.assertEqual(stored["ranges"][0]["text"], "Ответ")
             self.assertEqual(output.stat().st_mode & 0o777, 0o600)
             self.assertEqual(app.items[0]["annotation"], stored)
+            saved_bytes = output.read_bytes()
             with self.assertRaises(ValueError):
                 app.save({"id": item["id"], "text_sha256": item["text_sha256"], "ranges": [{"start": -1, "end": 2}]})
+            self.assertEqual(output.read_bytes(), saved_bytes)
 
 
 if __name__ == "__main__":

@@ -75,35 +75,63 @@ pi --no-extensions -e "$PWD"
 Локальная страница собирает стратифицированную выборку из `clean`, `record` и `notify`, восстанавливает текст по Pi entry ID и не копирует полные ответы в файл разметки.
 
 ```bash
-python3 review/app.py
+REVIEW_DIR="${PI_RUSSIAN_STYLE_REVIEW_DIR:-$HOME/.local/state/pi-russian-style}"
+mkdir -p "$REVIEW_DIR"
+python3 review/app.py --output "$REVIEW_DIR/annotations.json"
 ```
 
-Открой `http://127.0.0.1:8765`. Общая оценка и полезность решения выбираются крупными переключателями или клавишами `1`-`7`. Плохие формулировки выделяются мышкой и сразу подсвечиваются жёлтым; щелчок по выделению удаляет его.
+Открой `http://127.0.0.1:8765`. На компьютере общая оценка и полезность решения выбираются переключателями или клавишами `1`-`7`; фрагмент выделяется мышкой. На телефоне и планшете кнопки перехода всегда внизу, оценки открываются через «Оценить ответ», а выделенный пальцем фрагмент добавляется кнопкой «Отметить фрагмент». Касание жёлтого фрагмента удаляет выделение.
+Переход к другому ответу ждёт сохранения. Если связь оборвалась, нажми «Повторить сохранение» перед уходом с карточки или перезагрузкой страницы. После общей оценки в заголовке свёрнутого блока диагностики показывается её решение (`clean`, `record` или `notify`), поэтому открывать блок для просмотра решения не нужно.
 
 Слова не на кириллице подсвечены мягким розовым фоном. Это только подсказка для просмотра: точные технические имена могут быть уместны, а выбранные проблемные фрагменты остаются жёлтыми.
 
 Для оценки ответа можно раскрыть исходный запрос и предыдущий завершённый ответ той же ветки сессии.
 
-Разметка автоматически сохраняется в `.runtime/style-review/annotations.json`. В ней остаются оценки, SHA-256 и только выделенные фрагменты с позициями; исходные ответы читаются напрямую из сессионных JSONL.
+Разметку сохраняй в локальный каталог, не добавляемый в Git. В ней остаются оценки, SHA-256 и только выделенные фрагменты с позициями; исходные ответы читаются напрямую из сессионных JSONL.
 
-Сводка сохраняется рядом с локальной разметкой:
+
+Сводку сохраняй рядом с разметкой:
 
 ```bash
+REVIEW_DIR="${PI_RUSSIAN_STYLE_REVIEW_DIR:-$HOME/.local/state/pi-russian-style}"
 python3 review/summarize_annotations.py \
-  --annotations .runtime/style-review/annotations.json \
-  --output .runtime/style-review/summary.json
+  --annotations "$REVIEW_DIR/annotations.json" \
+  --output "$REVIEW_DIR/summary.json"
 ```
 
-Эти файлы содержат производные идентификаторы и выделенные фрагменты, поэтому остаются в `.runtime/` и не добавляются в Git.
+Эти файлы содержат производные идентификаторы и выделенные фрагменты; не добавляй их в Git.
+
+## Редакторская разметка GPT-6
+
+Для редакторской разметки нужны заранее подготовленные локальные карточки. Укажи каталог, внутри которого лежат `editorial-pilot-gpt6` и `editorial-round2-gpt6`:
+
+```bash
+EDITORIAL_DIR="${PI_RUSSIAN_STYLE_EDITORIAL_DIR:?Укажи локальный каталог с подготовленными карточками}"
+PILOT="$EDITORIAL_DIR/editorial-pilot-gpt6"
+python3 review/editorial.py serve --cards "$PILOT/cards.json" --choices "$PILOT/choices.json" --context "$PILOT/card-context-v3.json" --host 127.0.0.1 --port 8766
+```
+
+Для второй партии из восьми ответов:
+
+```bash
+EDITORIAL_DIR="${PI_RUSSIAN_STYLE_EDITORIAL_DIR:?Укажи локальный каталог с подготовленными карточками}"
+ROUND="$EDITORIAL_DIR/editorial-round2-gpt6"
+python3 review/editorial.py serve --cards "$ROUND/cards.json" --choices "$ROUND/choices.json" --context "$ROUND/card-context.json" --host 127.0.0.1 --port 37708
+```
+
+На каждой карточке видны исходный проект, начальный запрос из ветки сессии и исходный ответ вокруг фразы. Фраза, для которой предложены варианты, отделена от контекста; размеченные слова внутри неё подсвечены отдельно. Ближайший запрос, предыдущий ответ и выдержки файлов доступны под спойлерами. Можно выбрать варианты, оставить исходную фразу, отвергнуть все варианты, предложить свою редакцию и добавить комментарий. Выборы сохраняются отдельно от карточек. Это локальный пилот: он не меняет ответы и правила автоматически. Подготовка карточек и модельный прогон — отдельные шаги. Приватные карточки, выборы и журналы запусков в Git не добавляй.
+
 
 ## Наблюдение за длинными сессиями
 
-После загрузки обновлённого расширения работай как обычно. Когда накопятся длинные участки, создай небольшую фиксированную выборку:
+После загрузки обновлённого расширения работай как обычно. Когда накопятся длинные участки, создай небольшую фиксированную выборку. Для локальных результатов можно использовать отдельный каталог:
 
 ```bash
+REVIEW_DIR="${PI_RUSSIAN_STYLE_REVIEW_DIR:-$HOME/.local/state/pi-russian-style}"
+mkdir -p "$REVIEW_DIR/window-review"
 python3 review/app.py \
-  --window-sample .runtime/window-review/sample.json \
-  --output .runtime/window-review/annotations.json \
+  --window-sample "$REVIEW_DIR/window-review/sample.json" \
+  --output "$REVIEW_DIR/window-review/annotations.json" \
   --limit 20
 ```
 
@@ -112,10 +140,11 @@ python3 review/app.py \
 После ручной разметки:
 
 ```bash
+REVIEW_DIR="${PI_RUSSIAN_STYLE_REVIEW_DIR:-$HOME/.local/state/pi-russian-style}"
 python3 review/summarize_annotations.py \
-  --window-sample .runtime/window-review/sample.json \
-  --annotations .runtime/window-review/annotations.json \
-  --output .runtime/window-review/summary.json
+  --window-sample "$REVIEW_DIR/window-review/sample.json" \
+  --annotations "$REVIEW_DIR/window-review/annotations.json" \
+  --output "$REVIEW_DIR/window-review/summary.json"
 ```
 
 Этот режим не запускает модели, линтер или повторную оценку правил. Он сравнивает только полностью размеченные пары и отдельно показывает неполные. Модели и версии системной подсказки не смешиваются. Подробности и ограничения: `docs/window-observation.md`.

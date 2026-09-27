@@ -13,8 +13,9 @@
     .group { flex:1; }
     .label { margin-bottom:6px; color:var(--muted); font-size:12px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; }
     .buttons { display:flex; flex-wrap:wrap; gap:7px; }
-    button { border:1px solid var(--line); border-radius:9px; padding:8px 13px; color:var(--ink); background:var(--card); cursor:pointer; font:inherit; }
+    button { min-height:44px; border:1px solid var(--line); border-radius:9px; padding:8px 13px; color:var(--ink); background:var(--card); cursor:pointer; font:inherit; touch-action:manipulation; }
     button:hover { border-color:#aaa197; }
+    button:focus-visible, summary:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
     button.selected { border-color:var(--accent); color:white; background:var(--accent); }
     button.danger.selected { border-color:#963f36; background:#963f36; }
     main { max-width:1100px; margin:24px auto 100px; padding:0 22px; }
@@ -23,35 +24,75 @@
     .answer .non-cyrillic { background:rgba(234,122,158,.12); border-radius:2px; }
     mark { padding:1px 0; color:inherit; background:var(--yellow); cursor:pointer; border-bottom:2px solid #d3aa18; }
     .hint { margin:10px 3px; color:var(--muted); font-size:14px; }
+    .touch-tip, .mobile-hint, .rating-toggle, .selection-action { display:none; }
     .footer { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:18px; }
     .nav { display:flex; gap:8px; }
+    .rating-action { display:contents; }
     .primary { color:white; border-color:var(--accent); background:var(--accent); }
-    .primary:disabled { opacity:.4; cursor:not-allowed; }
-    .save { min-width:130px; color:var(--muted); text-align:center; }
+    .primary:disabled, button:disabled { opacity:.5; cursor:not-allowed; }
+    .save { min-width:130px; border:0; padding:8px 0; color:var(--muted); background:transparent; text-align:center; cursor:default; }
+    .save:disabled { opacity:1; }
+    .save:not(:disabled) { color:#963f36; text-decoration:underline; cursor:pointer; }
     details { margin-top:18px; padding:12px 16px; border:1px solid var(--line); border-radius:10px; color:var(--muted); background:#fbf8f1; }
-    details pre { white-space:pre-wrap; font-size:13px; }
+    details pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:13px; }
     .empty { padding:80px 20px; text-align:center; color:var(--muted); }
-    @media (max-width:760px) { .top { flex-direction:column; gap:12px; } header { position:static; } .answer { padding:20px; } .footer { flex-wrap:wrap; } }
+    @media (max-width:1024px) {
+      header { position:fixed; top:auto; bottom:calc(113px + env(safe-area-inset-bottom)); left:50%; z-index:11; width:min(720px, calc(100% - 24px)); max-height:min(65dvh, 480px); overflow-y:auto; padding:16px; border:1px solid var(--line); border-radius:14px; background:var(--card); box-shadow:0 8px 30px rgba(36,34,31,.2); transform:translate(-50%, 8px); opacity:0; visibility:hidden; pointer-events:none; }
+      body.rating-open header { transform:translate(-50%, 0); opacity:1; visibility:visible; pointer-events:auto; }
+      .top { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
+      .group { min-width:0; }
+      .keyboard-hint, .key, .desktop-hint { display:none; }
+      #overall.buttons, #usefulness.buttons { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+      #overall.buttons button:last-child { grid-column:1/-1; }
+      .buttons button { min-width:0; padding:8px 5px; font-size:14px; line-height:1.25; }
+      main { max-width:760px; margin:0 auto; padding:0 16px calc(140px + env(safe-area-inset-bottom)); }
+      .meta { position:sticky; top:0; z-index:8; margin:0 -16px 10px; padding:10px 16px; border-bottom:1px solid var(--line); background:rgba(247,243,235,.96); backdrop-filter:blur(10px); }
+      .answer { min-height:0; padding:20px; line-height:1.65; }
+      .touch-tip, .mobile-hint { display:block; }
+      .touch-tip { margin:10px 2px; color:var(--muted); font-size:13px; }
+      .hint { font-size:13px; }
+      .footer { position:fixed; bottom:0; left:50%; z-index:10; width:min(760px,100%); display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:0; padding:8px 16px calc(8px + env(safe-area-inset-bottom)); border-top:1px solid var(--line); background:var(--paper); box-shadow:0 -4px 20px rgba(36,34,31,.1); transform:translateX(-50%); }
+      .rating-action { grid-column:1/-1; grid-row:1; display:flex; align-items:center; gap:10px; min-width:0; }
+      .rating-toggle { display:flex; flex:1; align-items:center; justify-content:space-between; gap:8px; min-width:0; padding:7px 10px; border-color:var(--accent); text-align:left; }
+      .rating-label { flex:none; font-weight:650; }
+      .rating-current { overflow:hidden; color:var(--muted); font-size:13px; text-overflow:ellipsis; white-space:nowrap; }
+      .nav { display:contents; }
+      #previous { grid-area:2/1; }
+      #skip { grid-area:2/2; }
+      .footer .primary { grid-area:2/3; }
+      .nav button, .footer .primary { width:100%; padding:8px 3px; font-size:14px; }
+      .save { min-width:0; max-width:118px; padding:0; font-size:12px; line-height:1.2; text-align:right; overflow-wrap:anywhere; }
+      .save[data-initial="true"] { display:none; }
+      .selection-action { position:fixed; right:max(16px, calc((100vw - 720px)/2)); bottom:calc(123px + env(safe-area-inset-bottom)); z-index:12; display:block; border-color:#b38d00; background:var(--yellow); box-shadow:0 5px 18px rgba(36,34,31,.18); }
+      .selection-action[hidden] { display:none; }
+    }
+    @media (max-width:600px) {
+      .top { grid-template-columns:1fr; gap:14px; }
+      #overall.buttons { grid-template-columns:repeat(3,minmax(0,1fr)); }
+      #overall.buttons button:last-child { grid-column:auto; }
+      .answer { padding:18px 16px; }
+      header { max-height:min(60dvh, 440px); }
+    }
   </style>
 </head>
 <body>
-<header>
+<header id="rating-panel" aria-label="Оценка ответа">
   <div class="top">
     <section class="group">
-      <div class="label">Общая оценка · клавиши 1–3</div>
+      <div class="label">Общая оценка <span class="keyboard-hint">· клавиши 1–3</span></div>
       <div class="buttons" id="overall">
-        <button data-value="good">1 · Хороший</button>
-        <button data-value="acceptable">2 · Приемлемый</button>
-        <button class="danger" data-value="poor">3 · Плохой</button>
+        <button data-value="good"><span class="key">1 · </span>Хороший</button>
+        <button data-value="acceptable"><span class="key">2 · </span>Приемлемый</button>
+        <button class="danger" data-value="poor"><span class="key">3 · </span>Плохой</button>
       </div>
     </section>
     <section class="group">
-      <div class="label">Полезность решения · клавиши 4–7</div>
+      <div class="label">Полезность решения <span class="keyboard-hint">· клавиши 4–7</span></div>
       <div class="buttons" id="usefulness">
-        <button data-value="correct">4 · Верное</button>
-        <button data-value="partial">5 · Частично</button>
-        <button data-value="false_positive">6 · Ложное</button>
-        <button data-value="missed">7 · Пропуск</button>
+        <button data-value="correct"><span class="key">4 · </span>Верное</button>
+        <button data-value="partial"><span class="key">5 · </span>Частично</button>
+        <button data-value="false_positive"><span class="key">6 · </span>Ложное</button>
+        <button data-value="missed"><span class="key">7 · </span>Пропуск</button>
       </div>
     </section>
   </div>
@@ -62,25 +103,35 @@
     <div class="meta"><span id="progress"></span><span id="summary"></span></div>
     <details id="source"><summary>Исходный запрос пользователя</summary><pre id="source-request"></pre></details>
     <details id="prior" hidden><summary>Предыдущий ответ в этой ветке</summary><pre id="previous-answer"></pre></details>
+    <p class="touch-tip">Выдели фразу пальцем — появится кнопка «Отметить фрагмент».</p>
     <article class="answer" id="answer"></article>
-    <div class="hint">Мягкий розовый фон отмечает слова не на кириллице, но сам по себе не означает ошибку. Выдели мышкой плохую формулировку — она станет жёлтой. Щёлкни по жёлтому фрагменту, чтобы убрать выделение.</div>
+    <div class="hint"><span class="desktop-hint">Мягкий розовый фон отмечает слова не на кириллице, но сам по себе не означает ошибку. Выдели мышкой плохую формулировку — она станет жёлтой. Щёлкни по жёлтому фрагменту, чтобы убрать выделение.</span><span class="mobile-hint">Розовый фон — подсказка, не ошибка. Выдели слова пальцем и нажми «Отметить фрагмент»; коснись жёлтого выделения, чтобы убрать его.</span></div>
+    <button class="selection-action" id="selection-action" hidden>Отметить фрагмент</button>
     <div class="footer">
       <div class="nav">
         <button id="previous">← Назад</button>
         <button id="skip">Пропустить</button>
       </div>
-      <div class="save" id="save-state">Не изменено</div>
+      <div class="rating-action">
+        <button class="rating-toggle" id="rating-toggle" aria-controls="rating-panel" aria-expanded="false"><span class="rating-label">Оценить ответ</span><span class="rating-current" id="rating-current">Не оценено</span></button>
+        <button class="save" id="save-state" disabled aria-live="polite">Не изменено</button>
+      </div>
       <button class="primary" id="next">Следующий →</button>
     </div>
-    <details id="diagnostic"><summary>Что решила диагностика</summary><pre></pre></details>
+    <details id="diagnostic"><summary id="diagnostic-summary">Что решила диагностика</summary><pre></pre></details>
   </section>
 </main>
 <script>
-const state = { items: [], index: 0, annotation: null, saving: null };
+const state = { items: [], index: 0, annotation: null, saving: null, saveFailed: false };
 const answer = document.querySelector('#answer');
 const overall = document.querySelector('#overall');
 const usefulness = document.querySelector('#usefulness');
 const saveState = document.querySelector('#save-state');
+const ratingToggle = document.querySelector('#rating-toggle');
+const ratingPanel = document.querySelector('#rating-panel');
+const selectionAction = document.querySelector('#selection-action');
+const mobileLayout = matchMedia('(max-width:1024px)');
+let pendingSelection = null;
 
 function freshAnnotation(item) {
   return item.annotation || { id:item.id, text_sha256:item.text_sha256, overall:null, usefulness:null, ranges:[] };
@@ -128,65 +179,153 @@ function renderText() {
   if (cursor < item.text.length) appendTintedText(item.text.slice(cursor));
 }
 function setButtons(container, value) {
-  for (const button of container.querySelectorAll('button')) button.classList.toggle('selected', button.dataset.value === value);
+  for (const button of container.querySelectorAll('button')) {
+    const selected = button.dataset.value === value;
+    button.classList.toggle('selected', selected);
+    button.setAttribute('aria-pressed', String(selected));
+  }
 }
 function completedCount() { return state.items.filter(item => item.annotation?.overall).length; }
+function updateNavigation() {
+  const blocked = state.saveFailed || !!state.saving;
+  const last = state.index === state.items.length - 1;
+  document.querySelector('#previous').disabled = state.index === 0 || blocked;
+  document.querySelector('#skip').disabled = last || blocked;
+  document.querySelector('#next').disabled = last || !state.annotation.overall || blocked;
+}
+function renderRatingSummary() {
+  const labels = { good:'Хороший', acceptable:'Приемлемый', poor:'Плохой', correct:'Верное', partial:'Частично', false_positive:'Ложное', missed:'Пропуск' };
+  const quality = labels[state.annotation.overall];
+  const usefulnessLabel = labels[state.annotation.usefulness];
+  document.querySelector('#rating-current').textContent = quality ? [quality, usefulnessLabel].filter(Boolean).join(' · ') : 'Не оценено';
+}
+function setRatingOpen(open) {
+  const expanded = mobileLayout.matches && open;
+  if (mobileLayout.matches && !expanded && ratingPanel.contains(document.activeElement)) ratingToggle.focus({preventScroll:true});
+  document.body.classList.toggle('rating-open', expanded);
+  ratingToggle.setAttribute('aria-expanded', String(expanded));
+  ratingPanel.inert = mobileLayout.matches && !expanded;
+  ratingPanel.setAttribute('aria-hidden', String(mobileLayout.matches && !expanded));
+  pendingSelection = null;
+  selectionAction.hidden = true;
+}
+mobileLayout.addEventListener('change', () => setRatingOpen(false));
+setRatingOpen(false);
+function renderDiagnosticSummary() {
+  const decision = state.annotation.overall ? state.items[state.index].diagnostic.decision : null;
+  document.querySelector('#diagnostic-summary').textContent = decision
+    ? `Что решила диагностика — ${decision}`
+    : 'Что решила диагностика';
+}
 function render() {
   const item = state.items[state.index];
   state.annotation = freshAnnotation(item);
+  state.saveFailed = false;
+  setRatingOpen(false);
   setButtons(overall, state.annotation.overall);
   setButtons(usefulness, state.annotation.usefulness);
+  renderRatingSummary();
   renderText();
   document.querySelector('#source-request').textContent = item.source_request || 'Запрос не восстановлен';
   document.querySelector('#prior').hidden = !item.previous_answer;
   document.querySelector('#previous-answer').textContent = item.previous_answer || '';
   document.querySelector('#progress').textContent = `${state.index + 1} / ${state.items.length}`;
   document.querySelector('#summary').textContent = `Оценено: ${completedCount()}`;
-  document.querySelector('#previous').disabled = state.index === 0;
-  document.querySelector('#next').disabled = !state.annotation.overall;
   document.querySelector('#diagnostic pre').textContent = JSON.stringify(item.diagnostic, null, 2);
+  renderDiagnosticSummary();
   saveState.textContent = item.annotation ? 'Сохранено' : 'Не оценено';
+  saveState.dataset.initial = String(!item.annotation);
+  saveState.disabled = true;
+  updateNavigation();
 }
 async function save() {
   const item = state.items[state.index];
   item.annotation = structuredClone(state.annotation);
-  document.querySelector('#next').disabled = !state.annotation.overall;
+  state.saveFailed = false;
   saveState.textContent = 'Сохраняю…';
+  saveState.dataset.initial = 'false';
+  saveState.disabled = true;
   const payload = structuredClone(state.annotation);
   const previous = state.saving || Promise.resolve();
-  const request = previous.catch(() => {}).then(() =>
-    fetch('/api/annotation', { method:'POST', keepalive:true, headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) })
-      .then(async response => { if (!response.ok) throw new Error((await response.json()).error); return response.json(); })
-      .then(saved => { item.annotation = saved; saveState.textContent = 'Сохранено'; document.querySelector('#summary').textContent = `Оценено: ${completedCount()}`; })
-      .catch(error => { saveState.textContent = `Ошибка: ${error.message}`; })
-  );
+  const request = previous.catch(() => {}).then(async () => {
+    const response = await fetch('/api/annotation', { method:'POST', keepalive:true, headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+    if (!response.ok) {
+      let message = 'Не удалось сохранить';
+      try { message = (await response.json()).error || message; } catch {}
+      throw new Error(message);
+    }
+    return response.json();
+  });
   state.saving = request;
-  await request;
-  if (state.saving === request) state.saving = null;
+  updateNavigation();
+  try {
+    const saved = await request;
+    item.annotation = saved;
+    if (state.saving === request) {
+      saveState.textContent = 'Сохранено';
+      document.querySelector('#summary').textContent = `Оценено: ${completedCount()}`;
+    }
+  } catch (error) {
+    if (state.saving === request) {
+      state.saveFailed = true;
+      saveState.textContent = 'Повторить сохранение';
+      saveState.disabled = false;
+    }
+  } finally {
+    if (state.saving === request) state.saving = null;
+    updateNavigation();
+  }
 }
 function choose(container, field, value) {
   state.annotation[field] = value;
   setButtons(container, value);
+  renderRatingSummary();
+  if (field === 'overall') renderDiagnosticSummary();
   void save();
+  if (mobileLayout.matches && state.annotation.overall && state.annotation.usefulness) setRatingOpen(false);
 }
-overall.addEventListener('click', event => { if (event.target.dataset.value) choose(overall, 'overall', event.target.dataset.value); });
-usefulness.addEventListener('click', event => { if (event.target.dataset.value) choose(usefulness, 'usefulness', event.target.dataset.value); });
-answer.addEventListener('mouseup', () => {
+overall.addEventListener('click', event => {
+  const button = event.target.closest('button[data-value]');
+  if (button) choose(overall, 'overall', button.dataset.value);
+});
+usefulness.addEventListener('click', event => {
+  const button = event.target.closest('button[data-value]');
+  if (button) choose(usefulness, 'usefulness', button.dataset.value);
+});
+ratingToggle.addEventListener('click', () => setRatingOpen(!document.body.classList.contains('rating-open')));
+saveState.addEventListener('click', () => { if (state.saveFailed) void save(); });
+function selectionOffsets() {
   const selection = window.getSelection();
-  if (!selection || selection.isCollapsed || !selection.rangeCount) return;
+  if (!selection || selection.isCollapsed || !selection.rangeCount) return null;
   const selected = selection.getRangeAt(0);
-  if (!answer.contains(selected.commonAncestorContainer)) return;
+  if (!answer.contains(selected.commonAncestorContainer)) return null;
   const prefix = document.createRange();
   prefix.selectNodeContents(answer);
   prefix.setEnd(selected.startContainer, selected.startOffset);
   const start = prefix.toString().length;
   const end = start + selected.toString().length;
-  selection.removeAllRanges();
-  if (end <= start) return;
-  state.annotation.ranges = normalizedRanges([...state.annotation.ranges, {start,end}]);
+  return end > start ? {start,end} : null;
+}
+function addSelection(offsets) {
+  window.getSelection()?.removeAllRanges();
+  pendingSelection = null;
+  selectionAction.hidden = true;
+  state.annotation.ranges = normalizedRanges([...state.annotation.ranges, offsets]);
   renderText();
   void save();
+}
+answer.addEventListener('mouseup', () => {
+  if (mobileLayout.matches && matchMedia('(pointer:coarse)').matches) return;
+  const offsets = selectionOffsets();
+  if (offsets) addSelection(offsets);
 });
+document.addEventListener('selectionchange', () => {
+  if (!mobileLayout.matches) return;
+  pendingSelection = selectionOffsets();
+  selectionAction.hidden = !pendingSelection;
+});
+selectionAction.addEventListener('pointerdown', event => event.preventDefault());
+selectionAction.addEventListener('click', () => { if (pendingSelection) addSelection(pendingSelection); });
 answer.addEventListener('click', event => {
   const mark = event.target.closest('mark');
   if (!mark) return;
@@ -196,7 +335,8 @@ answer.addEventListener('click', event => {
   void save();
 });
 async function move(delta) {
-  if (state.saving) await state.saving;
+  if (state.saving) { try { await state.saving; } catch {} }
+  if (state.saveFailed) return;
   const target = Math.max(0, Math.min(state.items.length - 1, state.index + delta));
   if (target !== state.index) { state.index = target; render(); scrollTo({top:0, behavior:'smooth'}); }
 }
@@ -210,6 +350,9 @@ document.addEventListener('keydown', event => {
     const [field,value] = maps[event.key]; choose(field === 'overall' ? overall : usefulness, field, value);
   } else if (event.key === 'ArrowLeft') void move(-1);
   else if (event.key === 'ArrowRight' && state.annotation.overall) void move(1);
+});
+window.addEventListener('beforeunload', event => {
+  if (state.saving || state.saveFailed) { event.preventDefault(); event.returnValue = ''; }
 });
 fetch('/api/sample').then(response => response.json()).then(data => {
   state.items = data.items;
