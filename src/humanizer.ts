@@ -12,6 +12,7 @@ const TOOL_NAMES = [
   "humanizer_patch_draft_set",
   "humanizer_lint",
   "humanizer_inspect",
+  "humanizer_reader_check",
   "humanizer_publish",
   "humanizer_discard",
 ] as const;
@@ -25,6 +26,7 @@ type Job = {
   draft: string;
   revision: number;
   lint?: HumanizerResult & { revision: number };
+  readerCheckRevision?: number;
   publishPending: boolean;
 };
 
@@ -110,7 +112,8 @@ export function installHumanizer(pi: ExtensionAPI): void {
   const lintResult = (active: Job, lint: HumanizerResult) => {
     const errors = lint.findings.filter((finding) => finding.kind === "ERROR").slice(0, 8).map((finding) => finding.rule).join("; ");
     const warningNote = lint.warnings > 0 ? ` Контекстные WARN: ${lint.warnings}; они не блокируют публикацию сами по себе.` : "";
-    return `Lint revision ${active.revision}: ${lintSummary(active.lint)}${errors ? `. ERROR: ${errors}` : ""}${warningNote}`;
+    const readerCheckNote = active.readerCheckRevision === active.revision ? " Reader-check пройден." : " Reader-check для этой revision ещё не зафиксирован.";
+    return `Lint revision ${active.revision}: ${lintSummary(active.lint)}${errors ? `. ERROR: ${errors}` : ""}${warningNote}${readerCheckNote}`;
   };
 
   pi.registerTool({
@@ -121,7 +124,7 @@ export function installHumanizer(pi: ExtensionAPI): void {
     parameters: Type.Object({ text: Type.String(), sourceLabel: Type.Optional(Type.String()) }),
     async execute(_id, params) {
       if (job) return fail(job.sourceEntryId
-        ? "Draft уже создан командой /ru-clean. Не создавай новый: используй humanizer_inspect, patch, lint или publish."
+        ? "Draft уже создан командой /ru-clean. Не создавай новый: используй humanizer_inspect, patch, lint, reader-check или publish."
         : "Уже есть активный Humanizer draft; заверши его или вызови humanizer_discard.");
       job = { id: jobId(), sourceHash: textSha256(params.text), sourceLabel: params.sourceLabel || "явно выбранный текст", contractVersion: "humanizer-ru", draft: params.text, revision: 1, publishPending: false };
       persist();
@@ -145,6 +148,7 @@ export function installHumanizer(pi: ExtensionAPI): void {
       active.revision++;
       active.lint = undefined;
       active.publishPending = false;
+      active.readerCheckRevision = undefined;
       persist();
       return result(`Draft обновлён: revision ${active.revision}. Предыдущий lint инвалидирован.`);
     },
@@ -166,6 +170,7 @@ export function installHumanizer(pi: ExtensionAPI): void {
       active.revision++;
       active.lint = undefined;
       active.publishPending = false;
+      active.readerCheckRevision = undefined;
       persist();
       if (params.lintAfter === false) return result(`Patchset из ${params.patches.length} правок применён: revision ${active.revision}. Lint намеренно не запускался.`);
       const lint = await lintDraft(active, false, signal);
@@ -177,7 +182,7 @@ export function installHumanizer(pi: ExtensionAPI): void {
     name: "humanizer_lint",
     label: "Lint Humanizer draft",
     description: "Проверяет текущую ревизию draft линтером humanizer-ru без временного файла проекта.",
-    promptGuidelines: ["Use humanizer_lint before humanizer_publish; ERROR blocks publication, while WARN requires contextual judgment. Set formal only for a genuinely formal genre."],
+    promptGuidelines: ["Use humanizer_lint before humanizer_reader_check and humanizer_publish; ERROR blocks publication, while WARN requires contextual judgment. Set formal only for a genuinely formal genre."],
     parameters: Type.Object({ formal: Type.Optional(Type.Boolean()) }),
     async execute(_id, params, signal) {
       const active = requireJob();
@@ -195,7 +200,25 @@ export function installHumanizer(pi: ExtensionAPI): void {
     async execute() {
       const active = requireJob();
       if (!active) return fail("Нет активного Humanizer draft.");
-      return result(`Draft ${active.id}: ${active.sourceLabel}; revision ${active.revision}; ${lintSummary(active.lint)}; source ${active.sourceHash.slice(0, 12)}; draft ${textSha256(active.draft).slice(0, 12)}.`);
+      const readerCheck = active.readerCheckRevision === active.revision ? `reader-check revision ${active.revision}` : "reader-check не пройден";
+      return result(`Draft ${active.id}: ${active.sourceLabel}; revision ${active.revision}; ${lintSummary(active.lint)}; ${readerCheck}; source ${active.sourceHash.slice(0, 12)}; draft ${textSha256(active.draft).slice(0, 12)}.`);
+    },
+  });
+
+  pi.registerTool({
+    name: "humanizer_reader_check",
+    label: "Confirm Humanizer reader check",
+    description: "Фиксирует ручную проверку финального draft как reader-check для конкретной revision.",
+    promptGuidelines: ["Use humanizer_reader_check only after reading the complete final draft as a reader and checking facts, composition, terminology and the next actionable step."],
+    parameters: Type.Object({ revision: Type.Number() }),
+    async execute(_id, params) {
+      const active = requireJob();
+      if (!active) return fail("Нет активного Humanizer draft.");
+      if (active.revision !== params.revision) return fail(`Draft уже имеет revision ${active.revision}; reader-check нужно подтвердить для текущей revision.`);
+      active.readerCheckRevision = active.revision;
+      active.publishPending = false;
+      persist();
+      return result(`Reader-check зафиксирован для revision ${active.revision}.`);
     },
   });
 
@@ -203,7 +226,7 @@ export function installHumanizer(pi: ExtensionAPI): void {
     name: "humanizer_publish",
     label: "Publish Humanizer draft",
     description: "Помечает проверенный draft для публикации отдельным assistant-сообщением.",
-    promptGuidelines: ["Use humanizer_publish only after humanizer_lint on the final revision and only when there are no ERROR findings."],
+    promptGuidelines: ["Use humanizer_publish only after humanizer_lint and humanizer_reader_check on the final revision and only when there are no ERROR findings. WARN requires the reader-check result, not automatic rejection."],
     parameters: Type.Object({}),
     async execute() {
       const active = requireJob();
@@ -211,6 +234,7 @@ export function installHumanizer(pi: ExtensionAPI): void {
       if (!active.sourceEntryId) return fail("Этот draft относится к файлу или фрагменту: примени его обычным edit, а не публикуй в чат.");
       if (!active.lint || active.lint.revision !== active.revision) return fail("Сначала запусти lint по текущей revision.");
       if (active.lint.status !== "ok" || active.lint.errors > 0) return fail("Lint недоступен или нашёл ERROR; публикация заблокирована.");
+      if (active.readerCheckRevision !== active.revision) return fail("Сначала зафиксируй reader-check для текущей revision.");
       active.publishPending = true;
       persist();
       return result(`Публикация подготовлена. Заверши ход ровно маркером ${PUBLISH_READY} без чистовика.`);
@@ -246,7 +270,7 @@ export function installHumanizer(pi: ExtensionAPI): void {
       job = { id: jobId(), sourceEntryId: source.id, sourceHash: textSha256(source.text), sourceLabel: `assistant message ${source.id}`, contractVersion: "humanizer-ru", draft: source.text, revision: 1, publishPending: false };
       persist();
       activateTools(pi);
-      pi.sendMessage({ customType: "russian-style-humanizer", display: false, details: { jobId: job.id }, content: `${promptText()}\n\nDraft уже создан extension в revision 1. Не вызывай humanizer_create_draft: работай с этим неизменяемым источником через humanizer_inspect, humanizer_patch_draft или humanizer_patch_draft_set, затем lint и publish. Сохраняй композицию. После humanizer_publish заверши ответ ровно маркером ${PUBLISH_READY}, без чистовика.\n\nИсточник:\n${source.text}` }, { triggerTurn: true });
+      pi.sendMessage({ customType: "russian-style-humanizer", display: false, details: { jobId: job.id }, content: `${promptText()}\n\nDraft уже создан extension в revision 1. Не вызывай humanizer_create_draft: работай с этим неизменяемым источником через humanizer_inspect, humanizer_patch_draft или humanizer_patch_draft_set, затем lint, humanizer_reader_check и publish. Сохраняй композицию. После humanizer_publish заверши ответ ровно маркером ${PUBLISH_READY}, без чистовика.\n\nИсточник:\n${source.text}` }, { triggerTurn: true });
     },
   });
 

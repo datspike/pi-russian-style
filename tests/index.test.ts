@@ -236,11 +236,33 @@ describe("extension lifecycle and commands", () => {
     expect(duplicateCreate.isError).toBe(true);
     expect(duplicateCreate.content[0].text).toContain("Draft уже создан командой /ru-clean");
     await harness.tools.get("humanizer_lint").execute("lint", {}, undefined);
+    const publishWithoutReaderCheck = await harness.tools.get("humanizer_publish").execute("publish", {}, undefined);
+    expect(publishWithoutReaderCheck.isError).toBe(true);
+    expect(publishWithoutReaderCheck.content[0].text).toContain("reader-check");
+    const readerCheck = await harness.tools.get("humanizer_reader_check").execute("reader-check", { revision: 1 }, undefined);
+    expect(readerCheck.isError).toBe(false);
     await harness.tools.get("humanizer_publish").execute("publish", {}, undefined);
     const replaced = harness.events.get("message_end")?.({ message: { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "HUMANIZER_PUBLISH_READY" }] } }, harness.ctx);
     expect(replaced.message.content[0].text).toContain("Humanizer · редактура сообщения source-1");
     expect(replaced.message.content[0].text).toContain(source.content[0].text);
     expect(harness.entries.find((entry) => entry.id === "source-1")?.message).toEqual(source);
+  });
+
+  test("reader-check gates publication but does not reject contextual WARN", async () => {
+    const root = await mkdtemp(join(tmpdir(), "russian-style-humanizer-warn-reader-check-"));
+    const harness = createHarness(join(root, "state.json"));
+    await harness.events.get("session_start")?.({}, harness.ctx);
+    const source = { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "Важно отметить — это runtime workflow." }] };
+    harness.entries.push({ type: "message", id: "source-warn", message: source });
+    await harness.commands.get("ru-clean").handler("", harness.ctx);
+    const lint = await harness.tools.get("humanizer_lint").execute("lint", {}, undefined);
+    expect(lint.content[0].text).toContain("WARN");
+    const blocked = await harness.tools.get("humanizer_publish").execute("publish", {}, undefined);
+    expect(blocked.isError).toBe(true);
+    expect(blocked.content[0].text).toContain("reader-check");
+    await harness.tools.get("humanizer_reader_check").execute("reader-check", { revision: 1 }, undefined);
+    const published = await harness.tools.get("humanizer_publish").execute("publish", {}, undefined);
+    expect(published.isError).toBe(false);
   });
 
   test("ru-clean forwards an explicit request to the Humanizer skill without creating a chat draft", async () => {
@@ -303,6 +325,7 @@ describe("extension lifecycle and commands", () => {
     harness.entries.push({ type: "message", id: "source-1", message: { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "Обычный русский технический ответ без явных нарушений." }] } });
     await harness.commands.get("ru-clean").handler("", harness.ctx);
     await harness.tools.get("humanizer_lint").execute("lint", {}, undefined);
+    await harness.tools.get("humanizer_reader_check").execute("reader-check", { revision: 1 }, undefined);
     await harness.tools.get("humanizer_publish").execute("publish", {}, undefined);
     expect(harness.events.get("message_end")?.({ message: { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "Не служебный финал" }] } }, harness.ctx)).toBeUndefined();
     expect(harness.getActiveTools()).not.toContain("humanizer_publish");
@@ -323,6 +346,8 @@ describe("extension lifecycle and commands", () => {
     expect(patchset.isError).toBe(false);
     expect(patchset.content[0].text).toContain("Lint revision 2");
     expect((await harness.tools.get("humanizer_inspect").execute("inspect", {}, undefined)).content[0].text).toContain("revision 2");
+    const readerCheck = await harness.tools.get("humanizer_reader_check").execute("reader-check", { revision: 2 }, undefined);
+    expect(readerCheck.isError).toBe(false);
     const stale = await harness.tools.get("humanizer_patch_draft").execute("patch", { expectedRevision: 1, oldText: "Первый исправленный фрагмент", newText: "Не должен примениться" }, undefined);
     expect(stale.isError).toBe(true);
     const rejected = await harness.tools.get("humanizer_patch_draft_set").execute("patchset", { expectedRevision: 2, patches: [{ oldText: "Первый исправленный фрагмент", newText: "X" }, { oldText: "отсутствует", newText: "Y" }] }, undefined);
@@ -330,7 +355,7 @@ describe("extension lifecycle and commands", () => {
     expect((await harness.tools.get("humanizer_inspect").execute("inspect", {}, undefined)).content[0].text).toContain("revision 2");
     const intermediate = await harness.tools.get("humanizer_patch_draft_set").execute("patchset", { expectedRevision: 2, patches: [{ oldText: "Первый исправленный фрагмент", newText: "Первый промежуточный фрагмент" }], lintAfter: false }, undefined);
     expect(intermediate.content[0].text).toContain("Lint намеренно не запускался");
-    expect((await harness.tools.get("humanizer_inspect").execute("inspect", {}, undefined)).content[0].text).toContain("revision 3; lint ещё не запускался");
+    expect((await harness.tools.get("humanizer_inspect").execute("inspect", {}, undefined)).content[0].text).toContain("revision 3; lint ещё не запускался; reader-check не пройден");
     const formalDraft = await harness.tools.get("humanizer_lint").execute("lint", { formal: true }, undefined);
     expect(formalDraft.content[0].text).toContain("Lint revision 3");
   });
