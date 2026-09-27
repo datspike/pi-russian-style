@@ -3,7 +3,7 @@
 ## Проверенный снимок
 
 - Репозиторий: `pi-russian-style`.
-- База ревью: `ce0e12ea77293120693a0b7e0632179717abfdda` и текущий незакоммиченный diff, включая новые файлы.
+- Проверенный снимок: PR #1 с коммитами `ff316e5` и `0b6fc8a`, слитый в `master` коммитом `979793a`.
 - Область: stateful Humanizer, `/ru-clean`, packaged skill и lint, безопасная диагностика и связанные тесты.
 
 ## Требования и доказательства
@@ -21,11 +21,11 @@
 
 ## Проверки
 
-После последнего исправления выполнены:
+Для PR #1 после исправления reader-check выполнены:
 
 ```bash
 bash run-checks.sh
-# 35 Bun tests, TypeScript typecheck, 39 Python tests, benchmark
+# 44 Bun tests, TypeScript typecheck, 54 Python tests, benchmark
 
 git diff --check
 pi --no-extensions -e "$PWD" --list-models
@@ -36,14 +36,11 @@ python3 skills/humanizer-ru/scripts/lint.py skills/humanizer-ru/SKILL.md
 
 ## Независимое ревью
 
-Выполнено четыре независимых Astra-прохода, три исправительных цикла:
-
-1. Исправлены privacy-проекция diagnostics и устаревшее ожидание lint test.
-2. Исправлены default active tools и слишком широкая замена assistant-сообщения при публикации.
-3. Исправлен вызов active-tool API внутри фабрики расширения до `Runner.bindCore()`; деактивация перенесена в `session_start`.
-4. Финальный Astra review: `PASS`, P0/P1 отсутствуют.
-
-Финальный reviewer: `openai/gpt-6-astra`, thinking `medium`.
+Выполнено независимое findings-first ревью PR #1 после исправления reader-check:
+1. Подтверждена привязка reader-check к текущей revision и блокировка публикации без проверки.
+2. Подтверждено, что `WARN` сам по себе не блокирует публикацию после reader-check.
+3. Подтверждён безопасный eval для явного аудита без утверждения полного авторства.
+4. Финальный review: `PASS`, `Findings: none`; подтверждённых P0/P1/P2 нет.
 
 ## Ограничения
 

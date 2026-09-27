@@ -1,6 +1,6 @@
 # Квитанция завершения: улучшение workflow Humanizer
 
-## Проверенный объём
+## Историческая квитанция; текущий runtime-контракт обновлён в PR #1
 
 Изменения относятся к интерактивному Humanizer в `pi-russian-style`: `/ru-clean`, draft lifecycle, patchset, формальный lint, публикация и редакторские инструкции.
 
@@ -13,18 +13,18 @@
 | Одиночные и пакетные правки защищены ревизией | `humanizer_patch_draft` и `humanizer_patch_draft_set` требуют `expectedRevision`. |
 | Patchset атомарен | Все фрагменты валидируются до изменения draft; missing, ambiguous и overlapping patchset не меняют revision и содержимое. |
 | Формальный lint доступен в tools | `humanizer_lint({ formal: true })` передаёт `--formal` в packaged lint script. |
-| WARN не блокируют публикацию сами по себе | Tool отдельно обозначает contextual `WARN`; publication блокируют только недоступный lint или `ERROR`. |
+| WARN не блокируют публикацию сами по себе | Tool отдельно обозначает contextual `WARN`; публикация требует lint текущей revision без `ERROR` и `humanizer_reader_check` для той же revision. |
 | Pending publication не протекает в поздний ответ | Любой терминальный assistant-финал без точного `HUMANIZER_PUBLISH_READY` очищает job и pending state. |
 | Источник `/ru-clean` не бывает промежуточным tool turn | `latestAssistant()` выбирает только `role: assistant` с `stopReason: "stop"`; regression test игнорирует поздний `toolUse`. |
 | Документация соответствует runtime | `SKILL.md` и integration brief описывают precreated draft, `expectedRevision`, patchset, отсутствие reload-восстановления и реальную отмену pending publication. |
 
 ## Проверки
 
-После последнего исправления выполнены:
+Для исторического среза после исправлений выполнены; актуальная квитанция PR #1 приведена в `docs/humanizer-integration-closeout.md`:
 
 ```bash
 bash run-checks.sh
-# 38 Bun tests, TypeScript typecheck, 39 Python tests, benchmark
+# 44 Bun tests, TypeScript typecheck, 54 Python tests, benchmark
 
 git diff --check
 pi --no-extensions -e "$PWD" --list-models
