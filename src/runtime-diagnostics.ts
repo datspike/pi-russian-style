@@ -17,7 +17,9 @@ import {
   type HumanizerResult,
 } from "./diagnostics.js";
 
-export const DEFAULT_DIAGNOSTICS_PATH = resolve(homedir(), ".pi", "agent", "state", "russian-style-diagnostics.jsonl");
+export function defaultAgentDir(): string { return resolve(process.env.PI_CODING_AGENT_DIR || resolve(homedir(), ".pi", "agent")); }
+export function defaultDiagnosticsPath(): string { return resolve(defaultAgentDir(), "state", "russian-style-diagnostics.jsonl"); }
+export const DEFAULT_DIAGNOSTICS_PATH = defaultDiagnosticsPath();
 export const DEFAULT_HUMANIZER_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "..", "skills", "humanizer-ru", "scripts", "lint.py");
 export const DEFAULT_HUMANIZER_TIMEOUT_MS = 1500;
 

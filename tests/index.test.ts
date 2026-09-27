@@ -60,7 +60,7 @@ function createHarness(statePath: string, overrides: Record<string, unknown> = {
 }
 
 describe("state", () => {
-  test("missing and invalid state default to enabled", async () => {
+  test("missing and invalid state default to enabled with diagnostics off", async () => {
     const root = await mkdtemp(join(tmpdir(), "russian-style-state-"));
     expect(await loadRussianStyleState(join(root, "missing.json"))).toEqual({ state: DEFAULT_RUSSIAN_STYLE_STATE });
     const path = join(root, "invalid.json");
@@ -70,11 +70,19 @@ describe("state", () => {
     expect(result.warning).toContain("Не удалось прочитать");
   });
 
+  test("legacy v1 state keeps diagnostics enabled during upgrade", async () => {
+    const root = await mkdtemp(join(tmpdir(), "russian-style-legacy-state-"));
+    const path = join(root, "state.json");
+    await writeFile(path, JSON.stringify({ version: 1, enabled: false }), "utf8");
+    expect(await loadRussianStyleState(path)).toEqual({ state: { version: 2, enabled: false, diagnosticsEnabled: true } });
+  });
+
   test("state writer is atomic, private and newline-terminated", async () => {
     const root = await mkdtemp(join(tmpdir(), "russian-style-write-"));
     const path = join(root, "nested", "state.json");
-    await writeRussianStyleState(path, { version: 1, enabled: false });
-    expect(JSON.parse(await readFile(path, "utf8"))).toEqual({ version: 1, enabled: false });
+    const state = { version: 2 as const, enabled: false, diagnosticsEnabled: true };
+    await writeRussianStyleState(path, state);
+    expect(JSON.parse(await readFile(path, "utf8"))).toEqual(state);
     expect((await stat(path)).mode & 0o777).toBe(0o600);
     expect((await readFile(path, "utf8")).endsWith("\n")).toBe(true);
   });
@@ -82,9 +90,9 @@ describe("state", () => {
   test("concurrent toggles use the latest state under flock", async () => {
     const root = await mkdtemp(join(tmpdir(), "russian-style-concurrent-"));
     const path = join(root, "state.json");
-    await writeRussianStyleState(path, { version: 1, enabled: true });
+    await writeRussianStyleState(path, { version: 2, enabled: true, diagnosticsEnabled: false });
     await Promise.all(Array.from({ length: 8 }, () => mutateRussianStyleState(path, "toggle")));
-    expect(JSON.parse(await readFile(path, "utf8"))).toEqual({ version: 1, enabled: true });
+    expect(JSON.parse(await readFile(path, "utf8"))).toEqual({ version: 2, enabled: true, diagnosticsEnabled: false });
   });
 });
 
@@ -185,30 +193,31 @@ describe("extension lifecycle and commands", () => {
     expect(events.has("session_start")).toBe(true);
   });
 
-  test("default-on lifecycle injects prompt and publishes status", async () => {
+  test("default-on lifecycle injects prompt and publishes separate diagnostic status", async () => {
     const root = await mkdtemp(join(tmpdir(), "russian-style-lifecycle-"));
     const harness = createHarness(join(root, "state.json"));
     await harness.events.get("session_start")?.({}, harness.ctx);
-    expect(harness.statuses.at(-1)).toEqual(["russian-style", "russian-style:on"]);
+    expect(harness.statuses.at(-1)).toEqual(["russian-style", "russian-style:on · diagnostics:off"]);
     const result = await harness.events.get("before_agent_start")?.({ prompt: "Подготовь отчёт", systemPrompt: "base" }, harness.ctx);
     expect(result.systemPrompt).toContain(RUSSIAN_STYLE_PROMPT_MARKER);
     await harness.events.get("session_shutdown")?.({}, harness.ctx);
     expect(harness.statuses.at(-1)).toEqual(["russian-style", undefined]);
   });
 
-  test("commands persist on, off, toggle and leave status read-only", async () => {
+  test("commands persist independent style and diagnostic settings", async () => {
     const root = await mkdtemp(join(tmpdir(), "russian-style-commands-"));
     const path = join(root, "state.json");
     const harness = createHarness(path);
     await harness.commands.get("russian-style").handler("status", harness.ctx);
     expect(await readFile(path).catch(() => "")).toBe("");
+    await harness.commands.get("russian-style").handler("diagnostics on", harness.ctx);
+    expect(JSON.parse(await readFile(path, "utf8"))).toEqual({ version: 2, enabled: true, diagnosticsEnabled: true });
     await harness.commands.get("russian-style").handler("off", harness.ctx);
-    expect(JSON.parse(await readFile(path, "utf8"))).toEqual({ version: 1, enabled: false });
-    await harness.commands.get("russian-style").handler("on", harness.ctx);
-    await harness.commands.get("russian-style").handler("toggle", harness.ctx);
-    expect(JSON.parse(await readFile(path, "utf8"))).toEqual({ version: 1, enabled: false });
+    expect(JSON.parse(await readFile(path, "utf8"))).toEqual({ version: 2, enabled: false, diagnosticsEnabled: true });
+    await harness.commands.get("russian-style").handler("diagnostics toggle", harness.ctx);
+    expect(JSON.parse(await readFile(path, "utf8"))).toEqual({ version: 2, enabled: false, diagnosticsEnabled: false });
     await harness.commands.get("russian-style").handler("wat", harness.ctx);
-    expect(JSON.parse(await readFile(path, "utf8"))).toEqual({ version: 1, enabled: false });
+    expect(JSON.parse(await readFile(path, "utf8"))).toEqual({ version: 2, enabled: false, diagnosticsEnabled: false });
   });
 
   test("headless lifecycle changes prompt without UI calls", async () => {
@@ -381,6 +390,7 @@ describe("extension lifecycle and commands", () => {
         resolveEntryId: async () => "answer-1",
       },
     });
+    await harness.commands.get("russian-style").handler("diagnostics on", harness.ctx);
     const text = "Реализовал результат. Semantic authority связывает editorial finding с identity ledger, posting preview и manifest. ".repeat(3);
     const message = {
       role: "assistant", stopReason: "stop", timestamp: 123, provider: "openai", model: "test-model",
@@ -413,6 +423,7 @@ describe("extension lifecycle and commands", () => {
         resolveEntryId: async () => null,
       },
     });
+    await harness.commands.get("russian-style").handler("diagnostics on", harness.ctx);
     await harness.commands.get("russian-style").handler("off", harness.ctx);
     const text = "Этот итоговый русский технический ответ достаточно длинный для диагностического фильтра, но отключённый режим обязан полностью его пропустить.";
     harness.events.get("message_end")?.({ message: { role: "assistant", stopReason: "stop", timestamp: 1, provider: "test", model: "test", content: [{ type: "text", text }] } }, harness.ctx);
@@ -431,6 +442,7 @@ describe("extension lifecycle and commands", () => {
         resolveEntryId: async () => "answer-2",
       },
     });
+    await harness.commands.get("russian-style").handler("diagnostics on", harness.ctx);
     await harness.events.get("session_shutdown")?.({}, harness.ctx);
     await harness.events.get("session_start")?.({}, harness.ctx);
     const text = "После перезапуска сессии этот достаточно длинный русский технический ответ должен снова попасть в фоновую диагностическую очередь. Повторная сессия не должна оставлять очередь навсегда закрытой.";
@@ -443,7 +455,7 @@ describe("extension lifecycle and commands", () => {
 test("context events preserve snapshots and only successful compaction splits the segment", async () => {
   const records: any[] = [];
   const harness = createHarness("/unused", {
-    readState: async () => ({ state: { version: 1, enabled: true } }),
+    readState: async () => ({ state: { version: 2, enabled: true, diagnosticsEnabled: true } }),
     diagnosticDependencies: {
       lint: async () => ({ status: "ok", errors: 0, warnings: 0, score: 0, verdict: "clean", findings: [] }),
       appendRecord: async (_path: string, record: any) => { records.push(record); },
