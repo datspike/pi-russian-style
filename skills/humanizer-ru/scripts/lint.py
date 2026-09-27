@@ -214,11 +214,13 @@ def lint(text, *, formal=False):
 
 def verdict(errors, warnings):
     score = errors * 3 + warnings
-    if score <= 3 and errors == 0:
-        return score, "clean"
-    if score <= 10:
-        return score, "review - исправь errors" if errors else "review - посмотри warnings кластерами"
-    return score, "rewrite - слопа слишком много для точечных правок"
+    if score > 10:
+        return score, "rewrite - слопа слишком много для точечных правок"
+    if errors:
+        return score, "review - исправь errors"
+    if warnings == 0:
+        return 0, "clean"
+    return score, "review - посмотри warnings кластерами"
 
 
 def self_test():
@@ -238,6 +240,10 @@ def self_test():
 
     warn = "Важно отметить, что по сути будущее выглядит ярким."
     assert len([f for f in lint(warn) if f[0] == "WARN"]) >= 3
+    assert verdict(0, 1)[1].startswith("review"), verdict(0, 1)
+    assert verdict(0, 1)[1] != "clean", verdict(0, 1)
+    assert verdict(4, 0)[1].startswith("rewrite"), verdict(4, 0)
+    assert verdict(1, 8)[1].startswith("rewrite"), verdict(1, 8)
 
     markdown = "## Решение\n\n**Вывод:** оставить структуру.\n\n---\n\n| Вариант | Решение |\n|---|---|\n| A | Взять |"
     assert not [f for f in lint(markdown) if "разделитель" in f[2] or "эмодзи" in f[2]], lint(markdown)
@@ -302,7 +308,10 @@ def main():
     if errors:
         print("ГЕЙТ НЕ ПРОЙДЕН - текст не готов, чини errors и запускай снова.")
         sys.exit(1)
-    print("гейт пройден: артефактов копипаста не найдено.")
+    if warnings:
+        print("механический гейт пройден; обязательна ручная проверка читателем.")
+    else:
+        print("механический гейт пройден: артефактов копипаста не найдено.")
 
 
 if __name__ == "__main__":

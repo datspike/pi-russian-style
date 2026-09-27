@@ -36,6 +36,14 @@ class HumanizerLintCliTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("итого: 0 errors", result.stdout)
 
+    def test_style_warnings_require_reader_check(self):
+        result = self.run_lint("Важно отметить, что по сути будущее выглядит ярким.")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("warnings", result.stdout)
+        self.assertIn("-> review", result.stdout)
+        self.assertNotIn("-> clean", result.stdout)
+        self.assertIn("обязательна ручная проверка читателем", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
