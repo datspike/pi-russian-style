@@ -2,8 +2,21 @@ import { mkdtemp, readFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
-import { appendDiagnosticRecord, ContextObserver, createDiagnosticWorker, resolveAssistantEntryIdFromFile, type DiagnosticJob } from "../src/runtime-diagnostics.js";
+import { appendDiagnosticRecord, ContextObserver, createDiagnosticWorker, defaultAgentDir, defaultDiagnosticsPath, resolveAssistantEntryIdFromFile, type DiagnosticJob } from "../src/runtime-diagnostics.js";
 import { textSha256, type DiagnosticRecord, type HumanizerResult } from "../src/diagnostics.js";
+
+test("default paths follow PI_CODING_AGENT_DIR", () => {
+  const previous = process.env.PI_CODING_AGENT_DIR;
+  process.env.PI_CODING_AGENT_DIR = "/tmp/pi-russian-style-test-agent";
+  try {
+    expect(defaultAgentDir()).toBe("/tmp/pi-russian-style-test-agent");
+    expect(defaultDiagnosticsPath()).toBe("/tmp/pi-russian-style-test-agent/state/russian-style-diagnostics.jsonl");
+  } finally {
+    if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = previous;
+  }
+});
+
 
 const clean: HumanizerResult = { status: "ok", errors: 0, warnings: 0, score: 0, verdict: "clean", findings: [] };
 

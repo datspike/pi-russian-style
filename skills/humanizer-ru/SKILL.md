@@ -26,7 +26,7 @@ description: Используй для вычитки и редактуры ру
 
 ### Аудит до правки
 
-1. Прочитай `references/patterns.md`, `references/editorial-contract.md`, `references/reader-check.md` и `references/technical-jargon.md` целиком. Если существует `knowledge/corrections.md`, он важнее правил skill.
+1. Прочитай `references/patterns.md`, `references/editorial-contract.md`, `references/reader-check.md` и `references/technical-jargon.md` целиком.
 2. Назови читателя и функцию текста. Для технического документа прочитай весь файл и выпиши все английские слова и смешанные обороты вне точных литералов.
 3. Для каждой находки укажи точную цитату, номер паттерна или проблему понятности, способ исправления и категорию термина: точный литерал, необходимый термин или обычный рабочий жаргон.
 4. Проведи `scripts/lint.py` по исходному тексту. `ERROR` блокирует продолжение. `WARN` не доказывает дефект в одиночку, но требует ручной оценки; итог `clean` у линтера не заменяет reader-check.
@@ -54,7 +54,7 @@ description: Используй для вычитки и редактуры ру
 ### Fallback без tools
 
 ```bash
-SKILL_HOME=skills/humanizer-ru
+SKILL_HOME=/path/to/installed/skills/humanizer-ru
 python3 "$SKILL_HOME/scripts/lint.py" финальный_текст.md
 python3 "$SKILL_HOME/scripts/lint.py" --formal финальный_текст.md
 ```

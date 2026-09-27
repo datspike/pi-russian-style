@@ -17,6 +17,22 @@
     "writing",
     "humanizer"
   ],
+  "files": [
+    "src",
+    "prompts",
+    "README.md",
+    "LICENSE",
+    "skills/humanizer-ru/CHANGELOG.md",
+    "skills/humanizer-ru/LICENSE",
+    "skills/humanizer-ru/README.md",
+    "skills/humanizer-ru/SKILL.md",
+    "skills/humanizer-ru/banner.webp",
+    "skills/humanizer-ru/references/editorial-contract.md",
+    "skills/humanizer-ru/references/patterns.md",
+    "skills/humanizer-ru/references/reader-check.md",
+    "skills/humanizer-ru/references/technical-jargon.md",
+    "skills/humanizer-ru/scripts/lint.py"
+  ],
   "packageManager": "bun@1.3.13",
   "pi": {
     "extensions": [
@@ -28,7 +44,7 @@
   },
   "scripts": {
     "test": "bun test tests",
-    "typecheck": "tsc --noEmit --strict --target ES2022 --module ES2022 --moduleResolution bundler --skipLibCheck src/*.ts tests/*.test.ts review/evaluate-rules.ts",
+    "typecheck": "tsc --noEmit --strict --target ES2022 --module ES2022 --moduleResolution bundler --skipLibCheck src/*.ts tests/*.test.ts",
     "check": "bash run-checks.sh"
   },
   "peerDependencies": {
