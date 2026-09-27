@@ -2,7 +2,6 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
@@ -13,14 +12,16 @@ import { assistantText, isRussianDiagnosticCandidate } from "./diagnostics.js";
 import {
   createDiagnosticWorker,
   ContextObserver,
+  defaultAgentDir,
   defaultRuntimeDiagnosticDependencies,
   type DiagnosticJob,
   type RuntimeDiagnosticDependencies,
 } from "./runtime-diagnostics.js";
 import { installHumanizer } from "./humanizer.js";
 
-export type RussianStyleState = { version: 1; enabled: boolean };
-type StateAction = "on" | "off" | "toggle";
+export type RussianStyleState = { version: 2; enabled: boolean; diagnosticsEnabled: boolean };
+type LegacyRussianStyleState = { version: 1; enabled: boolean };
+type StateAction = "on" | "off" | "toggle" | "diagnostics-on" | "diagnostics-off" | "diagnostics-toggle";
 type LoadResult = { state: RussianStyleState; warning?: string };
 type Dependencies = {
   statePath: string;
@@ -33,21 +34,27 @@ type DependencyOverrides = Partial<Omit<Dependencies, "diagnosticDependencies">>
   diagnosticDependencies?: Partial<RuntimeDiagnosticDependencies>;
 };
 
-export const DEFAULT_RUSSIAN_STYLE_STATE: RussianStyleState = { version: 1, enabled: true };
-const defaultStatePath = resolve(homedir(), ".pi", "agent", "state", "russian-style.json");
+export const DEFAULT_RUSSIAN_STYLE_STATE: RussianStyleState = { version: 2, enabled: true, diagnosticsEnabled: false };
+export function defaultRussianStyleStatePath(): string { return resolve(defaultAgentDir(), "state", "russian-style.json"); }
 
 function isState(value: unknown): value is RussianStyleState {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<RussianStyleState>;
+  return candidate.version === 2 && typeof candidate.enabled === "boolean" && typeof candidate.diagnosticsEnabled === "boolean";
+}
+
+function isLegacyState(value: unknown): value is LegacyRussianStyleState {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<LegacyRussianStyleState>;
   return candidate.version === 1 && typeof candidate.enabled === "boolean";
 }
 
 export async function loadRussianStyleState(path: string): Promise<LoadResult> {
   try {
     const parsed = JSON.parse(await readFile(path, "utf8")) as unknown;
-    return isState(parsed)
-      ? { state: parsed }
-      : { state: { ...DEFAULT_RUSSIAN_STYLE_STATE }, warning: "Состояние russian-style имеет неизвестный формат; включён стандартный режим." };
+    if (isState(parsed)) return { state: parsed };
+    if (isLegacyState(parsed)) return { state: { version: 2, enabled: parsed.enabled, diagnosticsEnabled: true } };
+    return { state: { ...DEFAULT_RUSSIAN_STYLE_STATE }, warning: "Состояние russian-style имеет неизвестный формат; включён стандартный режим." };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return { state: { ...DEFAULT_RUSSIAN_STYLE_STATE } };
     return { state: { ...DEFAULT_RUSSIAN_STYLE_STATE }, warning: "Не удалось прочитать состояние russian-style; включён стандартный режим." };
@@ -84,14 +91,23 @@ async function withStateLock<T>(path: string, operation: () => Promise<T>): Prom
 export async function mutateRussianStyleState(path: string, action: StateAction): Promise<RussianStyleState> {
   return withStateLock(path, async () => {
     const current = (await loadRussianStyleState(path)).state;
+    if (action.startsWith("diagnostics-")) {
+      const diagnosticsAction = action.slice("diagnostics-".length);
+      const diagnosticsEnabled = diagnosticsAction === "on" ? true : diagnosticsAction === "off" ? false : !current.diagnosticsEnabled;
+      const next = { ...current, diagnosticsEnabled };
+      await writeRussianStyleState(path, next);
+      return next;
+    }
     const enabled = action === "on" ? true : action === "off" ? false : !current.enabled;
-    const next = { version: 1 as const, enabled };
+    const next = { ...current, enabled };
     await writeRussianStyleState(path, next);
     return next;
   });
 }
 
-function statusText(state: RussianStyleState): string { return state.enabled ? "russian-style:on" : "russian-style:off"; }
+function statusText(state: RussianStyleState): string {
+  return `russian-style:${state.enabled ? "on" : "off"} · diagnostics:${state.diagnosticsEnabled ? "on" : "off"}`;
+}
 
 function contentTextLength(content: unknown): number {
   if (!Array.isArray(content)) return 0;
@@ -102,7 +118,6 @@ function contentTextLength(content: unknown): number {
   }, 0);
 }
 
-
 export function createRussianStyleExtension(overrides: DependencyOverrides = {}) {
   const { diagnosticDependencies: diagnosticOverrides, ...baseOverrides } = overrides;
   const diagnosticDependencies = {
@@ -110,7 +125,7 @@ export function createRussianStyleExtension(overrides: DependencyOverrides = {})
     ...diagnosticOverrides,
   };
   const dependencies: Dependencies = {
-    statePath: process.env.PI_RUSSIAN_STYLE_STATE_PATH || defaultStatePath,
+    statePath: process.env.PI_RUSSIAN_STYLE_STATE_PATH || defaultRussianStyleStatePath(),
     readState: loadRussianStyleState,
     mutateState: mutateRussianStyleState,
     diagnosticDependencies,
@@ -167,7 +182,7 @@ export function createRussianStyleExtension(overrides: DependencyOverrides = {})
     pi.on("session_tree", () => { contextObserver.reset("tree"); });
     pi.on("model_select", () => { contextObserver.reset("configuration"); });
     pi.on("context", (_event, ctx) => {
-      if (alive && state.enabled) contextObserver.observe(ctx);
+      if (alive && state.enabled && state.diagnosticsEnabled) contextObserver.observe(ctx);
       else contextObserver.invalidate();
     });
     pi.on("tool_execution_start", () => { toolCalls++; });
@@ -176,7 +191,7 @@ export function createRussianStyleExtension(overrides: DependencyOverrides = {})
       toolResultChars += contentTextLength(event.result?.content);
     });
     pi.on("message_end", (event, ctx) => {
-      if (!alive || !state.enabled || !isRussianDiagnosticCandidate(event.message)) return;
+      if (!alive || !state.enabled || !state.diagnosticsEnabled || !isRussianDiagnosticCandidate(event.message)) return;
       const message = event.message as { timestamp: number; provider: string; model: string; content: unknown; stopReason: string };
       const text = assistantText(message);
       const sessionManager = ctx.sessionManager;
@@ -204,17 +219,35 @@ export function createRussianStyleExtension(overrides: DependencyOverrides = {})
       });
     });
     pi.registerCommand("russian-style", {
-      description: "Показать, включить или выключить русский стиль",
+      description: "Показать и отдельно управлять русским стилем и диагностикой",
       getArgumentCompletions: (prefix) => {
-        const items = ["status", "on", "off", "toggle"].filter((value) => value.startsWith(prefix)).map((value) => ({ value, label: value }));
-        return items.length > 0 ? items : null;
+        const items = ["status", "on", "off", "toggle", "diagnostics", "diagnostics status", "diagnostics on", "diagnostics off", "diagnostics toggle"];
+        const normalized = prefix.toLowerCase();
+        const matches = items.filter((value) => value.startsWith(normalized)).map((value) => ({ value, label: value }));
+        return matches.length > 0 ? matches : null;
       },
       handler: async (args, ctx) => {
-        const action = args.trim().toLowerCase() || "status";
-        if (action === "status") { await refreshState(ctx); if (ctx.hasUI) ctx.ui.notify(`${statusText(state)} · /russian-style on|off|toggle`, "info"); return; }
-        if (action !== "on" && action !== "off" && action !== "toggle") { if (ctx.hasUI) ctx.ui.notify("Использование: /russian-style status|on|off|toggle", "warning"); return; }
-        try { state = await dependencies.mutateState(dependencies.statePath, action); updateStatus(ctx); if (ctx.hasUI) ctx.ui.notify(statusText(state), "info"); }
-        catch (error) { await refreshState(ctx); if (ctx.hasUI) ctx.ui.notify(`Не удалось изменить russian-style: ${(error as Error).message}`, "error"); }
+        const tokens = args.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        const diagnosticsCommand = tokens[0] === "diagnostics";
+        const action = diagnosticsCommand ? tokens[1] || "status" : tokens[0] || "status";
+        if (!["status", "on", "off", "toggle"].includes(action)) {
+          if (ctx.hasUI) ctx.ui.notify("Использование: /russian-style status|on|off|toggle или /russian-style diagnostics status|on|off|toggle", "warning");
+          return;
+        }
+        if (action === "status") {
+          await refreshState(ctx);
+          if (ctx.hasUI) ctx.ui.notify(`${statusText(state)} · /russian-style diagnostics on|off`, "info");
+          return;
+        }
+        const stateAction = diagnosticsCommand ? `diagnostics-${action}` as StateAction : action as StateAction;
+        try {
+          state = await dependencies.mutateState(dependencies.statePath, stateAction);
+          updateStatus(ctx);
+          if (ctx.hasUI) ctx.ui.notify(statusText(state), "info");
+        } catch (error) {
+          await refreshState(ctx);
+          if (ctx.hasUI) ctx.ui.notify(`Не удалось изменить russian-style: ${(error as Error).message}`, "error");
+        }
       },
     });
     installHumanizer(pi);
