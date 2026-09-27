@@ -82,7 +82,7 @@ describe("humanizer process", () => {
     expect(actual.status).toBe("ok");
     expect(actual.verdict).toBe("clean");
     const violation = await runHumanizer("Важно отметить — это runtime workflow.", { path, timeoutMs: 1500 });
-    expect(violation.verdict).toBe("clean");
+    expect(violation.verdict).toBe("review");
     expect(violation.errors).toBe(0);
     expect(violation.warnings).toBeGreaterThan(0);
     expect(violation.findings.map((item) => item.rule)).toContain("23 длинное тире");
